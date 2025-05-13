@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Menu, Button, theme } from 'antd';
 import {
   MenuUnfoldOutlined,
@@ -30,53 +30,80 @@ interface MainLayoutProps {
 const MainLayout: React.FC<MainLayoutProps> = ({ toggleTheme, isDarkMode }) => {
   const [collapsed, setCollapsed] = useState(false);
   const { token } = theme.useToken();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 当前选中的菜单项
+  const [selectedKey, setSelectedKey] = useState('/');
+
+  // 监听路由变化，更新选中的菜单项
+  useEffect(() => {
+    const path = location.pathname;
+    // 获取路径的第一级，如 /novels/123 => /novels
+    const mainPath = '/' + path.split('/')[1];
+    setSelectedKey(mainPath || '/');
+  }, [location.pathname]);
+
+  // 处理菜单项点击
+  const handleMenuClick = (key: string) => {
+    navigate(key);
+  };
 
   // 侧边栏菜单项
   const menuItems = [
     {
       key: '/',
       icon: <HomeOutlined />,
-      label: '首页'
+      label: '首页',
+      onClick: () => handleMenuClick('/')
     },
     {
       key: '/novels',
       icon: <BookOutlined />,
-      label: '小说管理'
+      label: '小说管理',
+      onClick: () => handleMenuClick('/novels')
     },
     {
       key: '/characters',
       icon: <UserOutlined />,
-      label: '人物管理'
+      label: '人物管理',
+      onClick: () => handleMenuClick('/characters')
     },
     {
       key: '/locations',
       icon: <EnvironmentOutlined />,
-      label: '地点管理'
+      label: '地点管理',
+      onClick: () => handleMenuClick('/locations')
     },
     {
       key: '/outlines',
       icon: <OrderedListOutlined />,
-      label: '大纲管理'
+      label: '大纲管理',
+      onClick: () => handleMenuClick('/outlines')
     },
     {
       key: '/timeline',
       icon: <FieldTimeOutlined />,
-      label: '时间线'
+      label: '时间线',
+      onClick: () => handleMenuClick('/timeline')
     },
     {
       key: '/tools',
       icon: <ToolOutlined />,
-      label: '辅助工具'
+      label: '辅助工具',
+      onClick: () => handleMenuClick('/tools')
     },
     {
       key: '/statistics',
       icon: <BarChartOutlined />,
-      label: '统计分析'
+      label: '统计分析',
+      onClick: () => handleMenuClick('/statistics')
     },
     {
       key: '/ai',
       icon: <RobotOutlined />,
-      label: 'AI助手'
+      label: 'AI助手',
+      onClick: () => handleMenuClick('/ai')
     }
   ];
 
@@ -115,7 +142,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({ toggleTheme, isDarkMode }) => {
         <Menu
           theme={isDarkMode ? 'dark' : 'light'}
           mode="inline"
-          defaultSelectedKeys={['/']}
+          selectedKeys={[selectedKey]}
           items={menuItems}
         />
       </Sider>

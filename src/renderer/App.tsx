@@ -10,6 +10,13 @@ import Dashboard from './components/Dashboard';
 import NovelList from '@modules/novel/components/NovelList';
 import NovelDetail from '@modules/novel/components/NovelDetail';
 import Editor from '@modules/editor/components/Editor';
+import CharactersPage from './components/CharactersPage';
+import LocationsPage from './components/LocationsPage';
+import OutlinesPage from './components/OutlinesPage';
+import TimelinePage from './components/TimelinePage';
+import ToolsPage from './components/ToolsPage';
+import StatisticsPage from './components/StatisticsPage';
+import AIAssistantPage from './components/AIAssistantPage';
 
 // 主题配置
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -53,6 +60,13 @@ const App: React.FC = () => {
               <Route path="novels" element={<NovelList />} />
               <Route path="novels/:id" element={<NovelDetail />} />
               <Route path="novels/:novelId/chapters/:chapterId" element={<Editor />} />
+              <Route path="characters" element={<CharactersPage />} />
+              <Route path="locations" element={<LocationsPage />} />
+              <Route path="outlines" element={<OutlinesPage />} />
+              <Route path="timeline" element={<TimelinePage />} />
+              <Route path="tools" element={<ToolsPage />} />
+              <Route path="statistics" element={<StatisticsPage />} />
+              <Route path="ai" element={<AIAssistantPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>
