@@ -1,0 +1,66 @@
+/* 大纲管理样式 */
+
+.outline-manager {
+  padding: 20px;
+}
+
+.outline-tree-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.outline-tree-header h4 {
+  margin-bottom: 0;
+}
+
+.outline-custom-tree {
+  background-color: #fff;
+  padding: 16px;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.outline-tree-node {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  width: 100%;
+}
+
+.outline-tree-node-title {
+  cursor: pointer;
+  color: #1890ff;
+}
+
+.outline-tree-node-title:hover {
+  text-decoration: underline;
+}
+
+.outline-tree-node-actions {
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.outline-tree-node:hover .outline-tree-node-actions {
+  opacity: 1;
+}
+
+.outline-form-card {
+  height: 100%;
+}
+
+/* 响应式样式 */
+@media (max-width: 576px) {
+  .outline-tree-node {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .outline-tree-node-actions {
+    opacity: 1;
+    margin-top: 8px;
+  }
+} 

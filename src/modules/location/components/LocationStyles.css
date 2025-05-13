@@ -1,0 +1,37 @@
+/* 地点管理样式 */
+
+.location-manager {
+  padding: 20px;
+}
+
+.location-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.location-list-header h4 {
+  margin-bottom: 0;
+}
+
+.location-importance {
+  margin-bottom: 8px;
+}
+
+.location-description {
+  color: #666;
+  font-size: 14px;
+}
+
+.location-form-card {
+  height: 100%;
+}
+
+/* 响应式卡片样式 */
+@media (max-width: 576px) {
+  .ant-list-grid .ant-list-item {
+    padding-left: 0;
+    padding-right: 0;
+  }
+} 
