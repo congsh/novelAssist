@@ -1,0 +1,5 @@
+# This directory is a Syncthing folder marker.
+# Do not delete.
+
+folderID: novelAssist
+created: 2025-05-13T17:57:00+08:00

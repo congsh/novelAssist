@@ -1,4 +1,7 @@
-import { ipcRenderer } from 'electron';
+// 使用window.electron代替直接导入
+// 注意：window.electron是在预加载脚本中定义的
+const electron = (window as any).electron;
+
 import { 
   Location, 
   LocationCreateParams, 
@@ -17,7 +20,7 @@ export const locationService = {
    */
   async getLocations(params: LocationQueryParams = {}): Promise<Location[]> {
     try {
-      const response = await ipcRenderer.invoke('get-locations', params);
+      const response = await electron.invoke('get-locations', params);
       if (response.success) {
         return response.data;
       } else {
@@ -36,7 +39,7 @@ export const locationService = {
    */
   async getLocation(id: string): Promise<Location> {
     try {
-      const response = await ipcRenderer.invoke('get-location', { id });
+      const response = await electron.invoke('get-location', { id });
       if (response.success) {
         return response.data;
       } else {
@@ -55,7 +58,7 @@ export const locationService = {
    */
   async createLocation(params: LocationCreateParams): Promise<Location> {
     try {
-      const response = await ipcRenderer.invoke('create-location', params);
+      const response = await electron.invoke('create-location', params);
       if (response.success) {
         return response.data;
       } else {
@@ -74,7 +77,7 @@ export const locationService = {
    */
   async updateLocation(params: LocationUpdateParams): Promise<Location> {
     try {
-      const response = await ipcRenderer.invoke('update-location', params);
+      const response = await electron.invoke('update-location', params);
       if (response.success) {
         return response.data;
       } else {
@@ -93,7 +96,7 @@ export const locationService = {
    */
   async deleteLocation(id: string): Promise<{ id: string }> {
     try {
-      const response = await ipcRenderer.invoke('delete-location', { id });
+      const response = await electron.invoke('delete-location', { id });
       if (response.success) {
         return response.data;
       } else {

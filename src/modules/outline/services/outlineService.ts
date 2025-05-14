@@ -1,4 +1,7 @@
-import { ipcRenderer } from 'electron';
+// 使用window.electron代替直接导入
+// 注意：window.electron是在预加载脚本中定义的
+const electron = (window as any).electron;
+
 import { 
   OutlineItem, 
   OutlineCreateParams, 
@@ -18,7 +21,7 @@ export const outlineService = {
    */
   async getOutlines(params: OutlineQueryParams = {}): Promise<OutlineItem[]> {
     try {
-      const response = await ipcRenderer.invoke('get-outlines', params);
+      const response = await electron.invoke('get-outlines', params);
       if (response.success) {
         return response.data;
       } else {
@@ -37,7 +40,7 @@ export const outlineService = {
    */
   async getOutline(id: string): Promise<OutlineItem> {
     try {
-      const response = await ipcRenderer.invoke('get-outline', { id });
+      const response = await electron.invoke('get-outline', { id });
       if (response.success) {
         return response.data;
       } else {
@@ -56,7 +59,7 @@ export const outlineService = {
    */
   async createOutline(params: OutlineCreateParams): Promise<OutlineItem> {
     try {
-      const response = await ipcRenderer.invoke('create-outline', params);
+      const response = await electron.invoke('create-outline', params);
       if (response.success) {
         return response.data;
       } else {
@@ -75,7 +78,7 @@ export const outlineService = {
    */
   async updateOutline(params: OutlineUpdateParams): Promise<OutlineItem> {
     try {
-      const response = await ipcRenderer.invoke('update-outline', params);
+      const response = await electron.invoke('update-outline', params);
       if (response.success) {
         return response.data;
       } else {
@@ -95,7 +98,7 @@ export const outlineService = {
    */
   async deleteOutline(id: string, recursive: boolean = false): Promise<{ id: string }> {
     try {
-      const response = await ipcRenderer.invoke('delete-outline', { id, recursive });
+      const response = await electron.invoke('delete-outline', { id, recursive });
       if (response.success) {
         return response.data;
       } else {
@@ -114,7 +117,7 @@ export const outlineService = {
    */
   async getOutlineTree(novelId: string): Promise<OutlineTreeNode[]> {
     try {
-      const response = await ipcRenderer.invoke('get-outline-tree', { novel_id: novelId });
+      const response = await electron.invoke('get-outline-tree', { novel_id: novelId });
       if (response.success) {
         return response.data;
       } else {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Tabs, Card, message } from 'antd';
-import { EnvironmentOutlined, OrderedListOutlined } from '@ant-design/icons';
+import { Tabs, Card, message, Alert } from 'antd';
+import { EnvironmentOutlined, OrderedListOutlined, UserOutlined } from '@ant-design/icons';
 import LocationManager from '../../modules/location/components/LocationManager';
 import OutlineManager from '../../modules/outline/components/OutlineManager';
 import '../../modules/location/components/LocationStyles.css';
@@ -13,11 +13,18 @@ interface CreativeToolsProps {
 }
 
 /**
- * 创作工具页面组件，整合地点和大纲管理
+ * 创作工具页面组件，整合人物、地点和大纲管理
  */
 const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
   const [activeTab, setActiveTab] = useState('locations');
   const [currentNovelId, setCurrentNovelId] = useState<string>('');
+  
+  // 功能完成状态
+  const completedFeatures = {
+    characters: false, // 人物管理未完成
+    locations: true,   // 地点管理已完成
+    outlines: true     // 大纲管理已完成
+  };
   
   // 检查是否有小说ID
   useEffect(() => {
@@ -49,11 +56,34 @@ const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
             <TabPane 
               tab={
                 <span>
+                  <UserOutlined />
+                  人物管理
+                </span>
+              } 
+              key="characters"
+              disabled={!completedFeatures.characters}
+            >
+              {completedFeatures.characters ? (
+                <div>人物管理组件将在此显示</div>
+              ) : (
+                <Alert
+                  message="功能开发中"
+                  description="人物管理功能正在开发中，敬请期待！"
+                  type="info"
+                  showIcon
+                  icon={<UserOutlined />}
+                />
+              )}
+            </TabPane>
+            <TabPane 
+              tab={
+                <span>
                   <EnvironmentOutlined />
                   地点管理
                 </span>
               } 
               key="locations"
+              disabled={!completedFeatures.locations}
             >
               <LocationManager novelId={currentNovelId} />
             </TabPane>
@@ -65,6 +95,7 @@ const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
                 </span>
               } 
               key="outlines"
+              disabled={!completedFeatures.outlines}
             >
               <OutlineManager novelId={currentNovelId} />
             </TabPane>

@@ -105,13 +105,21 @@ function initOutlineHandlers() {
       
       // 获取同级大纲项目的最大排序值
       let maxSortOrder = 0;
-      const parentIdCondition = data.parent_id ? 'parent_id = ?' : 'parent_id IS NULL';
-      const parentIdParam = data.parent_id || null;
+      let maxOrderResult;
       
-      const maxOrderResult = await dbManager.get(
-        `SELECT MAX(sort_order) as max_order FROM outlines WHERE novel_id = ? AND ${parentIdCondition}`,
-        [data.novel_id, parentIdParam]
-      );
+      if (data.parent_id) {
+        // 有父节点的情况
+        maxOrderResult = await dbManager.get(
+          'SELECT MAX(sort_order) as max_order FROM outlines WHERE novel_id = ? AND parent_id = ?',
+          [data.novel_id, data.parent_id]
+        );
+      } else {
+        // 没有父节点的情况
+        maxOrderResult = await dbManager.get(
+          'SELECT MAX(sort_order) as max_order FROM outlines WHERE novel_id = ? AND parent_id IS NULL',
+          [data.novel_id]
+        );
+      }
       
       if (maxOrderResult && maxOrderResult.max_order !== null) {
         maxSortOrder = maxOrderResult.max_order;

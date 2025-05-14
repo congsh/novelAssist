@@ -16,14 +16,16 @@ import {
   Card,
   Divider,
   Popconfirm,
-  Empty
+  Empty,
+  Tooltip
 } from 'antd';
 import { 
   EditOutlined, 
   DeleteOutlined, 
   PlusOutlined, 
   ExclamationCircleOutlined,
-  ArrowLeftOutlined
+  ArrowLeftOutlined,
+  ReadOutlined
 } from '@ant-design/icons';
 
 const { Title, Paragraph } = Typography;
@@ -310,7 +312,16 @@ const NovelDetail: React.FC = () => {
             renderItem={(chapter) => (
               <List.Item
                 actions={[
-                  <Link to={`/novels/${id}/chapters/${chapter.id}`} key="edit">编辑</Link>,
+                  <Link to={`/novels/${id}/read/${chapter.id}`} key="read">
+                    <Tooltip title="阅读模式">
+                      <ReadOutlined />
+                    </Tooltip>
+                  </Link>,
+                  <Link to={`/novels/${id}/chapters/${chapter.id}`} key="edit">
+                    <Tooltip title="编辑模式">
+                      <EditOutlined />
+                    </Tooltip>
+                  </Link>,
                   <Popconfirm
                     key="delete"
                     title="确定要删除这个章节吗？"
@@ -320,13 +331,17 @@ const NovelDetail: React.FC = () => {
                     okText="确定"
                     cancelText="取消"
                   >
-                    <a>删除</a>
+                    <a>
+                      <Tooltip title="删除">
+                        <DeleteOutlined />
+                      </Tooltip>
+                    </a>
                   </Popconfirm>
                 ]}
               >
                 <List.Item.Meta
                   title={
-                    <Link to={`/novels/${id}/chapters/${chapter.id}`}>
+                    <Link to={`/novels/${id}/read/${chapter.id}`}>
                       {chapter.title}
                     </Link>
                   }

@@ -183,4 +183,6 @@ function setupMenu() {
 
 // 加载IPC处理器
 require('./ipc/novel-handler');
-require('./ipc/ai-handler'); 
+require('./ipc/ai-handler');
+require('./ipc/location-handler');
+require('./ipc/outline-handler'); 

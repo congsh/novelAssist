@@ -23,6 +23,12 @@ module.exports = {
       '@shared': path.resolve(__dirname, '../src/shared'),
       '@modules': path.resolve(__dirname, '../src/modules'),
     },
+    fallback: {
+      "path": require.resolve("path-browserify"),
+      "fs": false,
+      "stream": require.resolve("stream-browserify"),
+      "buffer": require.resolve("buffer"),
+    },
   },
   devtool: isDevelopment ? 'source-map' : false,
   module: {

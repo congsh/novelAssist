@@ -10,6 +10,7 @@ import Dashboard from './components/Dashboard';
 import NovelList from '@modules/novel/components/NovelList';
 import NovelDetail from '@modules/novel/components/NovelDetail';
 import Editor from '@modules/editor/components/Editor';
+import NovelReader from '@modules/novel/components/NovelReader';
 import CharactersPage from './components/CharactersPage';
 import LocationsPage from './components/LocationsPage';
 import OutlinesPage from './components/OutlinesPage';
@@ -60,6 +61,7 @@ const App: React.FC = () => {
               <Route path="novels" element={<NovelList />} />
               <Route path="novels/:id" element={<NovelDetail />} />
               <Route path="novels/:novelId/chapters/:chapterId" element={<Editor />} />
+              <Route path="novels/:novelId/read/:chapterId" element={<NovelReader />} />
               <Route path="characters" element={<CharactersPage />} />
               <Route path="locations" element={<LocationsPage />} />
               <Route path="outlines" element={<OutlinesPage />} />

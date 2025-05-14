@@ -1,0 +1,42 @@
+/* 全屏编辑器样式 */
+.fullscreen-editor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+  background: #fff;
+}
+
+/* 全屏阅读器样式 */
+.fullscreen-reader {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1000;
+}
+
+/* 阅读器内容样式 */
+.chapter-content {
+  text-align: justify;
+  padding: 0 10px;
+}
+
+.chapter-content p {
+  margin-bottom: 1em;
+  text-indent: 2em;
+}
+
+/* 暗色模式下的阅读器样式调整 */
+.dark-theme .chapter-content {
+  color: #e0e0e0;
+}
+
+.sepia-theme .chapter-content {
+  color: #5b4636;
+}
+
+/* ... existing code ... */ 
