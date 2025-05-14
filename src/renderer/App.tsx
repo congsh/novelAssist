@@ -18,6 +18,7 @@ import TimelinePage from './components/TimelinePage';
 import ToolsPage from './components/ToolsPage';
 import StatisticsPage from './components/StatisticsPage';
 import AIAssistantPage from './components/AIAssistantPage';
+import TagCategoryManager from '@modules/novel/components/TagCategoryManager';
 
 // 主题配置
 const { defaultAlgorithm, darkAlgorithm } = theme;
@@ -69,6 +70,7 @@ const App: React.FC = () => {
               <Route path="tools" element={<ToolsPage />} />
               <Route path="statistics" element={<StatisticsPage />} />
               <Route path="ai" element={<AIAssistantPage />} />
+              <Route path="tag-category" element={<TagCategoryManager />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

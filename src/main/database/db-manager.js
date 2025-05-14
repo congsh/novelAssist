@@ -81,17 +81,23 @@ class DbManager {
       
       // 检查timeline_events表是否需要更新
       this.updateTimelineEventsTable(() => {
-        console.log('数据库表结构检查完成');
-        
-        // 确保索引存在
-        this.createIndexes(() => {
-          console.log('数据库索引检查完成');
-          this.isInitialized = true;
+        // 检查novels表是否需要更新
+        this.updateNovelsTable(() => {
+          // 检查标签和分类表是否存在
+          this.updateTagsAndCategoriesTables(() => {
+            console.log('数据库表结构检查完成');
+            
+            // 确保索引存在
+            this.createIndexes(() => {
+              console.log('数据库索引检查完成');
+              this.isInitialized = true;
+            });
+          });
         });
       });
     });
   }
-  
+
   /**
    * 更新timeline_events表结构
    * @param {Function} callback - 更新完成后的回调函数
@@ -195,6 +201,167 @@ class DbManager {
           callback();
         }
       });
+    });
+  }
+
+  /**
+   * 更新novels表结构，添加category_id字段
+   * @param {Function} callback - 更新完成后的回调函数
+   */
+  updateNovelsTable(callback) {
+    // 检查表中是否有category_id列
+    this.db.all("PRAGMA table_info(novels)", (err, rows) => {
+      if (err) {
+        console.error('检查novels表结构失败:', err.message);
+        callback();
+        return;
+      }
+      
+      // 检查是否有category_id列
+      const hasCategoryIdColumn = rows.some(row => row.name === 'category_id');
+      
+      if (!hasCategoryIdColumn) {
+        console.log('需要更新novels表结构，添加category_id字段...');
+        
+        // 添加category_id列
+        this.db.run(`
+          ALTER TABLE novels ADD COLUMN category_id TEXT REFERENCES categories(id) ON DELETE SET NULL
+        `, (err) => {
+          if (err) {
+            console.error('添加category_id列失败:', err.message);
+          } else {
+            console.log('novels表结构更新成功，添加了category_id列');
+          }
+          callback();
+        });
+      } else {
+        console.log('novels表结构已是最新');
+        callback();
+      }
+    });
+  }
+
+  /**
+   * 更新标签和分类表结构
+   * @param {Function} callback - 更新完成后的回调函数
+   */
+  updateTagsAndCategoriesTables(callback) {
+    // 检查分类表是否存在
+    this.db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='categories'", (err, row) => {
+      if (err) {
+        console.error('检查categories表失败:', err.message);
+        callback();
+        return;
+      }
+      
+      if (!row) {
+        console.log('创建categories表...');
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS categories (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            color TEXT,
+            icon TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `, (err) => {
+          if (err) {
+            console.error('创建categories表失败:', err.message);
+            callback();
+            return;
+          }
+          
+          console.log('categories表创建成功');
+          
+          // 继续检查tags表
+          this.checkTagsTable(callback);
+        });
+      } else {
+        // 分类表已存在，继续检查tags表
+        this.checkTagsTable(callback);
+      }
+    });
+  }
+  
+  /**
+   * 检查标签表是否存在
+   * @param {Function} callback - 检查完成后的回调函数
+   */
+  checkTagsTable(callback) {
+    this.db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='tags'", (err, row) => {
+      if (err) {
+        console.error('检查tags表失败:', err.message);
+        callback();
+        return;
+      }
+      
+      if (!row) {
+        console.log('创建tags表...');
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS tags (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL UNIQUE,
+            description TEXT,
+            color TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          )
+        `, (err) => {
+          if (err) {
+            console.error('创建tags表失败:', err.message);
+            callback();
+            return;
+          }
+          
+          console.log('tags表创建成功');
+          
+          // 继续检查novel_tags表
+          this.checkNovelTagsTable(callback);
+        });
+      } else {
+        // 标签表已存在，继续检查novel_tags表
+        this.checkNovelTagsTable(callback);
+      }
+    });
+  }
+  
+  /**
+   * 检查小说-标签关联表是否存在
+   * @param {Function} callback - 检查完成后的回调函数
+   */
+  checkNovelTagsTable(callback) {
+    this.db.get("SELECT name FROM sqlite_master WHERE type='table' AND name='novel_tags'", (err, row) => {
+      if (err) {
+        console.error('检查novel_tags表失败:', err.message);
+        callback();
+        return;
+      }
+      
+      if (!row) {
+        console.log('创建novel_tags表...');
+        this.db.run(`
+          CREATE TABLE IF NOT EXISTS novel_tags (
+            novel_id TEXT NOT NULL,
+            tag_id TEXT NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (novel_id, tag_id),
+            FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE,
+            FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+          )
+        `, (err) => {
+          if (err) {
+            console.error('创建novel_tags表失败:', err.message);
+          } else {
+            console.log('novel_tags表创建成功');
+          }
+          callback();
+        });
+      } else {
+        console.log('novel_tags表已存在');
+        callback();
+      }
     });
   }
 
@@ -379,6 +546,43 @@ class DbManager {
       )
     `);
 
+    // 创建分类表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        color TEXT,
+        icon TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 创建标签表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS tags (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        description TEXT,
+        color TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 创建小说-标签关联表
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS novel_tags (
+        novel_id TEXT NOT NULL,
+        tag_id TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (novel_id, tag_id),
+        FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE,
+        FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+      )
+    `);
+
     // 创建AI提示模板表
     this.db.run(`
       CREATE TABLE IF NOT EXISTS ai_prompts (
@@ -496,6 +700,12 @@ class DbManager {
     // 版本历史相关索引
     this.db.run('CREATE INDEX IF NOT EXISTS idx_version_history_entity ON version_history(entity_id, entity_type)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_version_history_created_at ON version_history(created_at)');
+
+    // 分类和标签相关索引
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_categories_name ON categories(name)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_tags_name ON tags(name)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_novel_tags_novel_id ON novel_tags(novel_id)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_novel_tags_tag_id ON novel_tags(tag_id)');
   }
 
   /**

@@ -16,6 +16,7 @@
   "license": "MIT",
   "dependencies": {
     "@ant-design/icons": "^5.0.0",
+    "@types/react-beautiful-dnd": "^13.1.8",
     "antd": "^5.0.0",
     "draft-js": "^0.11.7",
     "draftjs-to-html": "^0.9.1",
@@ -25,6 +26,7 @@
     "level": "^8.0.0",
     "openai": "^4.24.1",
     "react": "^18.2.0",
+    "react-beautiful-dnd": "^13.1.1",
     "react-dom": "^18.2.0",
     "react-draft-wysiwyg": "^1.15.0",
     "react-router-dom": "^6.8.0",

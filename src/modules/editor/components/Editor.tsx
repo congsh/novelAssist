@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Layout, 
@@ -14,7 +14,8 @@ import {
   List,
   Card,
   Divider,
-  Statistic
+  Statistic,
+  Switch
 } from 'antd';
 import { 
   SaveOutlined, 
@@ -23,13 +24,19 @@ import {
   FullscreenExitOutlined,
   RobotOutlined,
   EditOutlined,
-  FieldTimeOutlined
+  FieldTimeOutlined,
+  HistoryOutlined,
+  BgColorsOutlined
 } from '@ant-design/icons';
 import { Editor as DraftEditor } from 'react-draft-wysiwyg';
 import { EditorState, ContentState, convertToRaw } from 'draft-js';
 import htmlToDraft from 'html-to-draftjs';
 import draftToHtml from 'draftjs-to-html';
 import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
+import VersionHistory from './VersionHistory';
+import ThemeSelector from './ThemeSelector';
+import VersionService from '../services/VersionService';
+import ThemeService from '../services/ThemeService';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
@@ -72,6 +79,16 @@ const Editor: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState<boolean>(false);
   const [aiDrawerVisible, setAiDrawerVisible] = useState<boolean>(false);
   const [writingTime, setWritingTime] = useState<number>(0);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
+  const [currentTheme, setCurrentTheme] = useState<string>(ThemeService.getCurrentThemeName());
+  const [activeTabKey, setActiveTabKey] = useState<string>('info');
+  
+  // 内容变更标记
+  const contentChanged = useRef<boolean>(false);
+  // 自动保存计时器
+  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // 上次自动保存的内容
+  const lastAutoSavedContent = useRef<string>('');
 
   // 加载章节数据
   const loadChapterData = useCallback(async () => {
@@ -92,6 +109,9 @@ const Editor: React.FC = () => {
           if (contentBlock) {
             const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
             setEditorState(EditorState.createWithContent(contentState));
+            
+            // 记录初始内容，用于自动保存比较
+            lastAutoSavedContent.current = chapterData.content;
           }
         }
         
@@ -116,6 +136,13 @@ const Editor: React.FC = () => {
   // 初始加载
   useEffect(() => {
     loadChapterData();
+    
+    // 组件卸载时清除自动保存计时器
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearInterval(autoSaveTimerRef.current);
+      }
+    };
   }, [loadChapterData]);
 
   // 计时器，记录写作时间
@@ -129,6 +156,30 @@ const Editor: React.FC = () => {
     return () => clearInterval(timer);
   }, [loading, saving]);
 
+  // 自动保存功能
+  useEffect(() => {
+    // 如果启用了自动保存且内容已更改
+    if (autoSaveEnabled && contentChanged.current) {
+      // 清除之前的计时器
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+      
+      // 设置新的自动保存计时器（5分钟）
+      autoSaveTimerRef.current = setTimeout(async () => {
+        if (contentChanged.current && !saving) {
+          await handleAutoSave();
+        }
+      }, 5 * 60 * 1000); // 5分钟
+    }
+    
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [editorState, autoSaveEnabled]);
+
   // 编辑器内容变化处理
   const handleEditorChange = (state: EditorState) => {
     setEditorState(state);
@@ -136,6 +187,52 @@ const Editor: React.FC = () => {
     // 计算字数
     const contentText = state.getCurrentContent().getPlainText();
     setWordCount(contentText.length);
+    
+    // 标记内容已更改
+    contentChanged.current = true;
+  };
+
+  // 自动保存处理
+  const handleAutoSave = async () => {
+    if (!novelId || !chapterId || !contentChanged.current) return;
+    
+    try {
+      // 将编辑器内容转换为HTML
+      const contentHtml = draftToHtml(convertToRaw(editorState.getCurrentContent()));
+      
+      // 如果内容没有变化，不执行自动保存
+      if (contentHtml === lastAutoSavedContent.current) {
+        return;
+      }
+      
+      setSaving(true);
+      
+      // 更新章节
+      const response = await window.electron.invoke('update-chapter', {
+        id: chapterId,
+        title,
+        content: contentHtml
+      });
+      
+      if (response.success) {
+        // 保存版本历史
+        await VersionService.saveVersion(chapterId, contentHtml, '自动保存');
+        
+        // 更新最后保存时间和内容
+        setLastSavedAt(new Date());
+        lastAutoSavedContent.current = contentHtml;
+        setChapter(response.data);
+        contentChanged.current = false;
+        
+        console.log('自动保存成功:', new Date().toLocaleString());
+      } else {
+        console.error('自动保存失败:', response.error);
+      }
+    } catch (error) {
+      console.error('自动保存失败:', error);
+    } finally {
+      setSaving(false);
+    }
   };
 
   // 保存章节内容
@@ -158,6 +255,13 @@ const Editor: React.FC = () => {
         message.success('保存成功');
         setLastSavedAt(new Date());
         setChapter(response.data);
+        
+        // 保存版本历史
+        await VersionService.saveVersion(chapterId, contentHtml, '手动保存');
+        
+        // 更新最后自动保存的内容
+        lastAutoSavedContent.current = contentHtml;
+        contentChanged.current = false;
       } else {
         message.error(response.error || '保存失败');
       }
@@ -174,6 +278,24 @@ const Editor: React.FC = () => {
     setIsFullscreen(!isFullscreen);
   };
 
+  // 处理主题变更
+  const handleThemeChange = (themeName: string) => {
+    setCurrentTheme(themeName);
+  };
+
+  // 处理版本恢复
+  const handleRestoreVersion = (content: string) => {
+    // 将HTML内容转换为EditorState
+    const contentBlock = htmlToDraft(content);
+    if (contentBlock) {
+      const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
+      setEditorState(EditorState.createWithContent(contentState));
+      
+      // 标记内容已更改
+      contentChanged.current = true;
+    }
+  };
+
   // 格式化时间
   const formatTime = (minutes: number) => {
     const hours = Math.floor(minutes / 60);
@@ -184,6 +306,9 @@ const Editor: React.FC = () => {
     }
     return `${mins}分钟`;
   };
+
+  // 获取主题样式
+  const themeStyles = ThemeService.generateThemeStyles();
 
   // 返回加载中状态
   if (loading) {
@@ -217,7 +342,10 @@ const Editor: React.FC = () => {
           <Input
             placeholder="章节标题"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              contentChanged.current = true;
+            }}
             style={{ width: 300, marginRight: 16 }}
           />
         </div>
@@ -229,6 +357,16 @@ const Editor: React.FC = () => {
               suffix="字" 
               style={{ marginRight: 16 }} 
             />
+            
+            <Tooltip title="自动保存">
+              <Switch 
+                checked={autoSaveEnabled} 
+                onChange={setAutoSaveEnabled} 
+                checkedChildren="自动保存开" 
+                unCheckedChildren="自动保存关"
+                style={{ marginRight: 8 }}
+              />
+            </Tooltip>
             
             <Button 
               type="primary" 
@@ -251,7 +389,32 @@ const Editor: React.FC = () => {
             <Tooltip title="章节信息">
               <Button 
                 icon={<EditOutlined />} 
-                onClick={() => setDrawerVisible(true)}
+                onClick={() => {
+                  setActiveTabKey('info');
+                  setDrawerVisible(true);
+                }}
+                style={{ marginRight: 8 }}
+              />
+            </Tooltip>
+            
+            <Tooltip title="版本历史">
+              <Button 
+                icon={<HistoryOutlined />} 
+                onClick={() => {
+                  setActiveTabKey('history');
+                  setDrawerVisible(true);
+                }}
+                style={{ marginRight: 8 }}
+              />
+            </Tooltip>
+            
+            <Tooltip title="主题设置">
+              <Button 
+                icon={<BgColorsOutlined />} 
+                onClick={() => {
+                  setActiveTabKey('theme');
+                  setDrawerVisible(true);
+                }}
                 style={{ marginRight: 8 }}
               />
             </Tooltip>
@@ -280,6 +443,9 @@ const Editor: React.FC = () => {
             wrapperClassName="editor-wrapper"
             editorClassName="editor-content"
             toolbarClassName="editor-toolbar"
+            wrapperStyle={themeStyles.editorWrapper}
+            editorStyle={themeStyles.editorContent}
+            toolbarStyle={themeStyles.editorToolbar}
             toolbar={{
               options: ['inline', 'blockType', 'fontSize', 'list', 'textAlign', 'history'],
               inline: {
@@ -296,7 +462,7 @@ const Editor: React.FC = () => {
         </div>
       </Content>
       
-      {/* 章节信息抽屉 */}
+      {/* 侧边抽屉 */}
       <Drawer
         title="章节信息"
         placement="right"
@@ -304,7 +470,10 @@ const Editor: React.FC = () => {
         onClose={() => setDrawerVisible(false)}
         open={drawerVisible}
       >
-        <Tabs defaultActiveKey="info">
+        <Tabs 
+          activeKey={activeTabKey} 
+          onChange={setActiveTabKey}
+        >
           <TabPane tab="基本信息" key="info">
             <Card>
               <Statistic 
@@ -330,6 +499,19 @@ const Editor: React.FC = () => {
                 </div>
               )}
             </Card>
+          </TabPane>
+          
+          <TabPane tab="版本历史" key="history">
+            {chapterId && (
+              <VersionHistory 
+                chapterId={chapterId} 
+                onRestoreVersion={handleRestoreVersion} 
+              />
+            )}
+          </TabPane>
+          
+          <TabPane tab="主题设置" key="theme">
+            <ThemeSelector onChange={handleThemeChange} />
           </TabPane>
           
           <TabPane tab="大纲" key="outline">

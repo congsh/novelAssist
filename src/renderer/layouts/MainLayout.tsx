@@ -14,7 +14,8 @@ import {
   BarChartOutlined,
   RobotOutlined,
   BulbOutlined,
-  BulbFilled
+  BulbFilled,
+  TagOutlined
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -86,6 +87,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ toggleTheme, isDarkMode }) => {
       icon: <FieldTimeOutlined />,
       label: '时间线',
       onClick: () => handleMenuClick('/timeline')
+    },
+    {
+      key: '/tag-category',
+      icon: <TagOutlined />,
+      label: '标签与分类',
+      onClick: () => handleMenuClick('/tag-category')
     },
     {
       key: '/tools',

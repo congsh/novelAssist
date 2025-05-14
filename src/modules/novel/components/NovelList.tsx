@@ -13,13 +13,15 @@ import {
   Popconfirm,
   Card,
   Row,
-  Col
+  Col,
+  Radio
 } from 'antd';
 import { 
   PlusOutlined, 
   EditOutlined, 
   DeleteOutlined, 
-  ExclamationCircleOutlined 
+  ExclamationCircleOutlined,
+  ImportOutlined
 } from '@ant-design/icons';
 
 const { Title } = Typography;
@@ -45,6 +47,9 @@ const NovelList: React.FC = () => {
   const [novels, setNovels] = useState<Novel[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [isModalVisible, setIsModalVisible] = useState<boolean>(false);
+  const [isImportModalVisible, setIsImportModalVisible] = useState<boolean>(false);
+  const [importFormat, setImportFormat] = useState<string>('txt');
+  const [importLoading, setImportLoading] = useState<boolean>(false);
   const [form] = Form.useForm();
   const navigate = useNavigate();
 
@@ -139,6 +144,41 @@ const NovelList: React.FC = () => {
     });
   };
 
+  // 打开导入小说对话框
+  const showImportModal = () => {
+    setImportFormat('txt');
+    setIsImportModalVisible(true);
+  };
+
+  // 处理导入小说
+  const handleImport = async () => {
+    setImportLoading(true);
+    try {
+      const response = await window.electron.invoke('import-novel', { format: importFormat });
+      
+      if (response.success) {
+        message.success('小说导入成功');
+        setIsImportModalVisible(false);
+        loadNovels();
+        
+        // 导航到导入的小说详情页
+        navigate(`/novels/${response.data.id}`);
+      } else {
+        message.error(response.error || '小说导入失败');
+      }
+    } catch (error) {
+      console.error('导入小说失败:', error);
+      message.error('导入小说失败');
+    } finally {
+      setImportLoading(false);
+    }
+  };
+
+  // 处理导入对话框取消
+  const handleImportCancel = () => {
+    setIsImportModalVisible(false);
+  };
+
   // 表格列定义
   const columns = [
     {
@@ -231,8 +271,15 @@ const NovelList: React.FC = () => {
             type="primary" 
             icon={<PlusOutlined />} 
             onClick={showCreateModal}
+            style={{ marginRight: 8 }}
           >
             新建小说
+          </Button>
+          <Button 
+            icon={<ImportOutlined />} 
+            onClick={showImportModal}
+          >
+            导入小说
           </Button>
         </Col>
       </Row>
@@ -322,6 +369,36 @@ const NovelList: React.FC = () => {
             </Select>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 导入小说对话框 */}
+      <Modal
+        title="导入小说"
+        open={isImportModalVisible}
+        onOk={handleImport}
+        onCancel={handleImportCancel}
+        okText="导入"
+        cancelText="取消"
+        confirmLoading={importLoading}
+      >
+        <p>请选择导入文件的格式：</p>
+        <Radio.Group 
+          value={importFormat} 
+          onChange={(e) => setImportFormat(e.target.value)}
+        >
+          <Radio value="txt">TXT文本文件</Radio>
+          <Radio value="json">JSON格式文件</Radio>
+        </Radio.Group>
+        
+        <div style={{ marginTop: 16 }}>
+          <p>
+            <strong>注意事项：</strong>
+          </p>
+          <ul>
+            <li>TXT格式：将导入为单个章节，自动提取标题和作者信息</li>
+            <li>JSON格式：需要符合特定结构，包含小说信息和章节内容</li>
+          </ul>
+        </div>
       </Modal>
     </div>
   );
