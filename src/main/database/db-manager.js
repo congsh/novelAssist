@@ -59,9 +59,142 @@ class DbManager {
         console.log('数据库表不存在，正在创建...');
         this.createTables();
       } else {
-        console.log('数据库表已存在，跳过创建');
-        this.isInitialized = true;
+        console.log('数据库表已存在，检查是否需要更新表结构...');
+        this.updateTables();
       }
+    });
+  }
+
+  /**
+   * 更新数据库表结构
+   */
+  updateTables() {
+    console.log('正在检查数据库表结构更新...');
+    
+    // 检查timeline_events表是否存在importance列
+    this.db.get("PRAGMA table_info(timeline_events)", (err, rows) => {
+      if (err) {
+        console.error('检查timeline_events表结构失败:', err.message);
+        this.isInitialized = true;
+        return;
+      }
+      
+      // 检查timeline_events表是否需要更新
+      this.updateTimelineEventsTable(() => {
+        console.log('数据库表结构检查完成');
+        
+        // 确保索引存在
+        this.createIndexes(() => {
+          console.log('数据库索引检查完成');
+          this.isInitialized = true;
+        });
+      });
+    });
+  }
+  
+  /**
+   * 更新timeline_events表结构
+   * @param {Function} callback - 更新完成后的回调函数
+   */
+  updateTimelineEventsTable(callback) {
+    // 检查表中是否有importance列
+    this.db.get("PRAGMA table_info(timeline_events)", (err, rows) => {
+      if (err) {
+        console.error('检查timeline_events表结构失败:', err.message);
+        callback();
+        return;
+      }
+      
+      // 获取所有列信息
+      this.db.all("PRAGMA table_info(timeline_events)", (err, rows) => {
+        if (err) {
+          console.error('获取timeline_events表结构失败:', err.message);
+          callback();
+          return;
+        }
+        
+        // 检查是否有importance列
+        const hasImportanceColumn = rows.some(row => row.name === 'importance');
+        // 检查列名是否需要更新
+        const hasRelatedCharacters = rows.some(row => row.name === 'related_characters');
+        const hasRelatedLocations = rows.some(row => row.name === 'related_locations');
+        
+        if (!hasImportanceColumn || hasRelatedCharacters || hasRelatedLocations) {
+          console.log('需要更新timeline_events表结构...');
+          
+          // 创建新表
+          this.db.run(`
+            CREATE TABLE IF NOT EXISTS timeline_events_new (
+              id TEXT PRIMARY KEY,
+              novel_id TEXT NOT NULL,
+              title TEXT NOT NULL,
+              description TEXT,
+              event_date TEXT,
+              importance TEXT DEFAULT 'minor',
+              created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+              character_ids TEXT,
+              location_id TEXT,
+              metadata TEXT,
+              FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
+            )
+          `, (err) => {
+            if (err) {
+              console.error('创建新timeline_events表失败:', err.message);
+              callback();
+              return;
+            }
+            
+            // 复制数据
+            this.db.run(`
+              INSERT INTO timeline_events_new (
+                id, novel_id, title, description, event_date, 
+                importance,
+                created_at, updated_at, 
+                character_ids, location_id, metadata
+              )
+              SELECT 
+                id, novel_id, title, description, event_date, 
+                'minor' AS importance,
+                created_at, updated_at, 
+                related_characters, related_locations, metadata
+              FROM timeline_events
+            `, (err) => {
+              if (err) {
+                console.error('复制timeline_events数据失败:', err.message);
+                callback();
+                return;
+              }
+              
+              // 删除旧表
+              this.db.run(`DROP TABLE timeline_events`, (err) => {
+                if (err) {
+                  console.error('删除旧timeline_events表失败:', err.message);
+                  callback();
+                  return;
+                }
+                
+                // 重命名新表
+                this.db.run(`ALTER TABLE timeline_events_new RENAME TO timeline_events`, (err) => {
+                  if (err) {
+                    console.error('重命名新timeline_events表失败:', err.message);
+                    callback();
+                    return;
+                  }
+                  
+                  console.log('timeline_events表结构更新成功');
+                  
+                  // 重新创建索引
+                  this.createIndexes(callback);
+                });
+              });
+            });
+          });
+        } else {
+          console.log('timeline_events表结构已是最新');
+          callback();
+        }
+      });
     });
   }
 
@@ -137,7 +270,6 @@ class DbManager {
         background TEXT,
         personality TEXT,
         appearance TEXT,
-        goals TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         image_path TEXT,
@@ -189,11 +321,11 @@ class DbManager {
         title TEXT NOT NULL,
         description TEXT,
         event_date TEXT,
-        sort_order INTEGER NOT NULL,
+        importance TEXT DEFAULT 'minor',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        related_characters TEXT,
-        related_locations TEXT,
+        character_ids TEXT,
+        location_id TEXT,
         metadata TEXT,
         FOREIGN KEY (novel_id) REFERENCES novels (id) ON DELETE CASCADE
       )
@@ -272,13 +404,20 @@ class DbManager {
         user_comment TEXT,
         metadata TEXT
       )
-    `);
-
-    // 创建索引
-    this.createIndexes();
-
-    console.log('数据库表创建完成');
-    this.isInitialized = true;
+    `, (err) => {
+      if (err) {
+        console.error('创建版本历史表失败:', err.message);
+        this.isInitialized = true;
+      } else {
+        console.log('所有数据库表创建完成');
+        
+        // 创建索引
+        this.createIndexes(() => {
+          console.log('数据库初始化完成');
+          this.isInitialized = true;
+        });
+      }
+    });
   }
 
   /**
@@ -300,8 +439,11 @@ class DbManager {
 
   /**
    * 创建索引
+   * @param {Function} [callback] - 创建完成后的回调函数
    */
-  createIndexes() {
+  createIndexes(callback) {
+    console.log('正在创建/检查数据库索引...');
+    
     // 小说相关索引
     this.db.run('CREATE INDEX IF NOT EXISTS idx_novels_title ON novels(title)');
     this.db.run('CREATE INDEX IF NOT EXISTS idx_novels_updated_at ON novels(updated_at)');
@@ -326,7 +468,18 @@ class DbManager {
 
     // 时间线相关索引
     this.db.run('CREATE INDEX IF NOT EXISTS idx_timeline_events_novel_id ON timeline_events(novel_id)');
-    this.db.run('CREATE INDEX IF NOT EXISTS idx_timeline_events_event_date ON timeline_events(novel_id, event_date)');
+    this.db.run('CREATE INDEX IF NOT EXISTS idx_timeline_events_event_date ON timeline_events(novel_id, event_date)', (err) => {
+      if (err) {
+        console.error('创建时间线索引失败:', err.message);
+      } else {
+        console.log('数据库索引创建/检查完成');
+      }
+      
+      // 如果有回调函数，执行回调
+      if (typeof callback === 'function') {
+        callback();
+      }
+    });
 
     // 笔记相关索引
     this.db.run('CREATE INDEX IF NOT EXISTS idx_notes_novel_id ON notes(novel_id)');

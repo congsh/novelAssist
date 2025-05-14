@@ -31,6 +31,11 @@
 - 创建地点和大纲的类型定义和服务层
 - 实现地点和大纲的状态管理
 - 创建创作工具页面，整合地点和大纲管理功能
+- 实现人物管理模块，包括人物列表、添加/编辑表单和详情页
+- 实现时间线管理模块，包括事件列表、添加/编辑表单
+- 创建人物和时间线的IPC处理器，实现CRUD操作
+- 创建人物和时间线的类型定义和服务层
+- 更新CharactersPage和TimelinePage，集成人物管理和时间线管理功能
 
 ### 修改
 - 将OpenAI依赖版本从^6.0.0更新为^4.24.1
@@ -54,6 +59,7 @@
 - 更新OutlinesPage组件，直接集成OutlineManager功能
 - 更新ToolsPage组件，显示已完成功能的状态，添加地点管理和大纲管理的功能卡片
 - 在main.js中添加地点和大纲的IPC处理器导入，解决IPC通信问题
+- 在main.js中添加人物和时间线的IPC处理器导入和初始化，解决IPC通信问题
 
 ### 修复
 - 修复依赖安装过程中的网络连接问题
@@ -74,6 +80,8 @@
 - 修复服务层中直接导入electron模块的问题，改用window.electron
 - 修复"Error invoking remote method"错误，添加缺失的IPC处理器导入
 - 修复大纲创建时的SQL参数错误（SQLITE_RANGE: column index out of range），优化参数处理逻辑
+- 修复timeline_events表结构问题，添加缺失的importance列，并将related_characters和related_locations列名更新为character_ids和location_id
+- 修复updateTimelineEventsTable方法中的回调函数处理，确保在表结构更新后正确调用createIndexes并传递回调
 
 ### 删除
 - 无

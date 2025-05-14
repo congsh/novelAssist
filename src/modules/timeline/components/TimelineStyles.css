@@ -1,0 +1,90 @@
+.timeline-manager {
+  padding: 20px 0;
+}
+
+.timeline-list {
+  margin-bottom: 20px;
+}
+
+.timeline-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.timeline-list-title {
+  margin-bottom: 0 !important;
+}
+
+.timeline-event-card {
+  margin-bottom: 16px;
+  transition: all 0.3s;
+}
+
+.timeline-event-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.timeline-event-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.timeline-event-date {
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 14px;
+}
+
+.timeline-event-title {
+  margin-bottom: 8px !important;
+}
+
+.timeline-event-description {
+  color: rgba(0, 0, 0, 0.65);
+  margin-bottom: 16px;
+}
+
+.timeline-event-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.timeline-event-relations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.timeline-event-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.timeline-form-item {
+  margin-bottom: 16px;
+}
+
+.timeline-form-buttons {
+  margin-top: 24px;
+  text-align: right;
+}
+
+.timeline-form-buttons button {
+  margin-left: 8px;
+}
+
+.timeline-visual {
+  margin-top: 24px;
+  padding: 16px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+}
+
+.timeline-visual-container {
+  height: 400px;
+  position: relative;
+} 
