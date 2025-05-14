@@ -106,5 +106,24 @@ export const locationService = {
       console.error('删除地点失败:', error);
       throw error;
     }
+  },
+
+  /**
+   * 获取地点地图数据
+   * @param novelId 小说ID
+   * @returns 地点地图数据
+   */
+  async getLocationMapData(novelId: string): Promise<any> {
+    try {
+      const response = await electron.invoke('get-location-map-data', { novelId });
+      if (response.success) {
+        return response.data;
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (error) {
+      console.error('获取地点地图数据失败:', error);
+      throw error;
+    }
   }
 }; 

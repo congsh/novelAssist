@@ -80,4 +80,180 @@
 
 .character-form-buttons button {
   margin-left: 8px;
+}
+
+/* 人物表单样式 */
+.character-form {
+  padding: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+}
+
+.character-form-title {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.character-form-footer {
+  margin-top: 24px;
+  text-align: right;
+}
+
+/* 人物列表样式 */
+.character-list {
+  margin-bottom: 20px;
+}
+
+.character-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.character-list-title {
+  margin: 0;
+}
+
+.character-list-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.character-list-search {
+  margin-bottom: 16px;
+}
+
+.character-list-table {
+  background-color: #fff;
+}
+
+.character-list-empty {
+  padding: 48px 0;
+  text-align: center;
+}
+
+/* 人物卡片样式 */
+.character-card {
+  margin-bottom: 16px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.character-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.character-card-content {
+  display: flex;
+  align-items: center;
+}
+
+.character-card-avatar {
+  margin-right: 16px;
+}
+
+.character-card-info {
+  flex: 1;
+}
+
+.character-card-title {
+  margin-bottom: 4px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.character-card-role {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.character-card-actions {
+  margin-top: 12px;
+}
+
+/* 人物详情样式 */
+.character-detail {
+  padding: 24px;
+  background-color: #fff;
+  border-radius: 4px;
+}
+
+.character-detail-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.character-detail-avatar {
+  margin-right: 24px;
+}
+
+.character-detail-title {
+  margin: 0;
+}
+
+.character-detail-role {
+  color: rgba(0, 0, 0, 0.45);
+}
+
+.character-detail-section {
+  margin-bottom: 24px;
+}
+
+.character-detail-section-title {
+  margin-bottom: 16px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* 人物关系图谱样式 */
+.character-relation-graph {
+  width: 100%;
+  height: 600px;
+  background-color: #fff;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.character-relation-graph svg {
+  width: 100%;
+  height: 100%;
+}
+
+.character-graph-loading {
+  width: 100%;
+  height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.character-graph-error {
+  width: 100%;
+  text-align: center;
+  padding: 20px;
+}
+
+/* 节点样式 */
+.node circle {
+  stroke: #fff;
+  stroke-width: 1.5px;
+}
+
+.node text {
+  font-size: 12px;
+  font-family: sans-serif;
+}
+
+.link {
+  stroke: #999;
+  stroke-opacity: 0.6;
+}
+
+.link-label {
+  font-size: 10px;
+  fill: #666;
 } 

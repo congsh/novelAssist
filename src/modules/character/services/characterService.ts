@@ -106,5 +106,24 @@ export const characterService = {
       console.error('删除人物失败:', error);
       throw error;
     }
+  },
+
+  /**
+   * 获取人物关系
+   * @param novelId 小说ID
+   * @returns 人物关系数据
+   */
+  async getCharacterRelationships(novelId: string): Promise<any> {
+    try {
+      const response = await electron.invoke('get-character-relationships', { novelId });
+      if (response.success) {
+        return response.data;
+      } else {
+        throw new Error(response.error);
+      }
+    } catch (error) {
+      console.error('获取人物关系失败:', error);
+      throw error;
+    }
   }
 }; 

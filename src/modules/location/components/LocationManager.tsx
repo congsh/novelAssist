@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { Row, Col, Drawer } from 'antd';
+import { Tabs, Card, Drawer } from 'antd';
 import LocationList from './LocationList';
+import LocationMap from './LocationMap';
 import LocationForm from './LocationForm';
 import { Location } from '../../../shared/types/location';
+
+const { TabPane } = Tabs;
 
 interface LocationManagerProps {
   novelId: string;
 }
 
 /**
- * 地点管理页面组件
+ * 地点管理器组件
  */
 const LocationManager: React.FC<LocationManagerProps> = ({ novelId }) => {
+  const [activeKey, setActiveKey] = useState<string>('list');
   const [formVisible, setFormVisible] = useState(false);
   const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
   
@@ -36,18 +40,21 @@ const LocationManager: React.FC<LocationManagerProps> = ({ novelId }) => {
   const handleFormCancel = () => {
     setFormVisible(false);
   };
-  
+
   return (
-    <div className="location-manager">
-      <Row>
-        <Col span={24}>
+    <Card>
+      <Tabs activeKey={activeKey} onChange={setActiveKey}>
+        <TabPane tab="地点列表" key="list">
           <LocationList 
             novelId={novelId}
             onAddLocation={handleAddLocation}
             onEditLocation={handleEditLocation}
           />
-        </Col>
-      </Row>
+        </TabPane>
+        <TabPane tab="地点地图" key="map">
+          <LocationMap novelId={novelId} />
+        </TabPane>
+      </Tabs>
       
       <Drawer
         title={currentLocation ? '编辑地点' : '添加地点'}
@@ -64,7 +71,7 @@ const LocationManager: React.FC<LocationManagerProps> = ({ novelId }) => {
           onCancel={handleFormCancel}
         />
       </Drawer>
-    </div>
+    </Card>
   );
 };
 

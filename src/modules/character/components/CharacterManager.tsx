@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { Row, Col, Drawer } from 'antd';
+import { Tabs, Card, Drawer } from 'antd';
 import CharacterList from './CharacterList';
+import CharacterRelationGraph from './CharacterRelationGraph';
 import CharacterForm from './CharacterForm';
 import { Character } from '../../../shared/types/character';
+
+const { TabPane } = Tabs;
 
 interface CharacterManagerProps {
   novelId: string;
 }
 
 /**
- * 人物管理页面组件
+ * 人物管理器组件
  */
 const CharacterManager: React.FC<CharacterManagerProps> = ({ novelId }) => {
+  const [activeKey, setActiveKey] = useState<string>('list');
   const [formVisible, setFormVisible] = useState(false);
   const [currentCharacter, setCurrentCharacter] = useState<Character | null>(null);
   
@@ -36,18 +40,21 @@ const CharacterManager: React.FC<CharacterManagerProps> = ({ novelId }) => {
   const handleFormCancel = () => {
     setFormVisible(false);
   };
-  
+
   return (
-    <div className="character-manager">
-      <Row>
-        <Col span={24}>
+    <Card>
+      <Tabs activeKey={activeKey} onChange={setActiveKey}>
+        <TabPane tab="人物列表" key="list">
           <CharacterList 
             novelId={novelId}
             onAddCharacter={handleAddCharacter}
             onEditCharacter={handleEditCharacter}
           />
-        </Col>
-      </Row>
+        </TabPane>
+        <TabPane tab="关系图谱" key="graph">
+          <CharacterRelationGraph novelId={novelId} />
+        </TabPane>
+      </Tabs>
       
       <Drawer
         title={currentCharacter ? '编辑人物' : '添加人物'}
@@ -64,7 +71,7 @@ const CharacterManager: React.FC<CharacterManagerProps> = ({ novelId }) => {
           onCancel={handleFormCancel}
         />
       </Drawer>
-    </div>
+    </Card>
   );
 };
 
