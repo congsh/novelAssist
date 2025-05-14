@@ -190,7 +190,9 @@ require('./ipc/outline-handler');
 // 加载人物和时间线IPC处理器
 const { initCharacterHandlers } = require('./ipc/character-handler');
 const { initTimelineHandlers } = require('./ipc/timeline-handler');
+const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
 
 // 初始化人物和时间线IPC处理器
 initCharacterHandlers();
-initTimelineHandlers(); 
+initTimelineHandlers();
+initNovelAssociationHandlers(); 

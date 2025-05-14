@@ -10,7 +10,8 @@ import {
   Modal, 
   Divider,
   Space,
-  Tooltip
+  Tooltip,
+  App
 } from 'antd';
 import { 
   HistoryOutlined, 
@@ -25,7 +26,7 @@ const { Text, Title } = Typography;
 
 interface VersionHistoryProps {
   chapterId: string;
-  onRestoreVersion: (content: string) => void;
+  onRestore: (content: string) => void;
 }
 
 interface Version {
@@ -47,7 +48,7 @@ interface ApiResponse {
  * 版本历史组件
  * 用于显示和管理章节的历史版本
  */
-const VersionHistory: React.FC<VersionHistoryProps> = ({ chapterId, onRestoreVersion }) => {
+const VersionHistory: React.FC<VersionHistoryProps> = ({ chapterId, onRestore }) => {
   const [versions, setVersions] = useState<Version[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [previewVisible, setPreviewVisible] = useState<boolean>(false);
@@ -85,7 +86,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ chapterId, onRestoreVer
       const response = await VersionService.restoreVersion(version.id) as ApiResponse;
       if (response.success) {
         message.success('版本恢复成功');
-        onRestoreVersion(version.content);
+        onRestore(version.content);
       } else {
         message.error(response.error || '版本恢复失败');
       }
@@ -142,6 +143,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ chapterId, onRestoreVer
   }
 
   return (
+    <App>
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Title level={5}><HistoryOutlined /> 版本历史</Title>
@@ -225,6 +227,7 @@ const VersionHistory: React.FC<VersionHistoryProps> = ({ chapterId, onRestoreVer
         />
       </Modal>
     </div>
+    </App>
   );
 };
 

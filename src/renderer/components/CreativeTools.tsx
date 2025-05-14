@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Tabs, Card, message, Alert } from 'antd';
+import { Tabs, Card, message, Alert, App } from 'antd';
 import { EnvironmentOutlined, OrderedListOutlined, UserOutlined } from '@ant-design/icons';
 import LocationManager from '../../modules/location/components/LocationManager';
 import OutlineManager from '../../modules/outline/components/OutlineManager';
 import '../../modules/location/components/LocationStyles.css';
 import '../../modules/outline/components/OutlineStyles.css';
-
-const { TabPane } = Tabs;
 
 interface CreativeToolsProps {
   novelId?: string;
@@ -18,6 +16,7 @@ interface CreativeToolsProps {
 const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
   const [activeTab, setActiveTab] = useState('locations');
   const [currentNovelId, setCurrentNovelId] = useState<string>('');
+  const { message: appMessage } = App.useApp();
   
   // 功能完成状态
   const completedFeatures = {
@@ -29,7 +28,7 @@ const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
   // 检查是否有小说ID
   useEffect(() => {
     if (!novelId) {
-      message.warning('请先选择一个小说');
+      appMessage.warning('请先选择一个小说');
     } else {
       setCurrentNovelId(novelId);
     }
@@ -39,6 +38,53 @@ const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
   const handleTabChange = (key: string) => {
     setActiveTab(key);
   };
+
+  // 定义Tab项
+  const tabItems = [
+    {
+      key: 'characters',
+      label: (
+        <span>
+          <UserOutlined />
+          人物管理
+        </span>
+      ),
+      disabled: !completedFeatures.characters,
+      children: completedFeatures.characters ? (
+        <div>人物管理组件将在此显示</div>
+      ) : (
+        <Alert
+          message="功能开发中"
+          description="人物管理功能正在开发中，敬请期待！"
+          type="info"
+          showIcon
+          icon={<UserOutlined />}
+        />
+      )
+    },
+    {
+      key: 'locations',
+      label: (
+        <span>
+          <EnvironmentOutlined />
+          地点管理
+        </span>
+      ),
+      disabled: !completedFeatures.locations,
+      children: <LocationManager novelId={currentNovelId} />
+    },
+    {
+      key: 'outlines',
+      label: (
+        <span>
+          <OrderedListOutlined />
+          大纲管理
+        </span>
+      ),
+      disabled: !completedFeatures.outlines,
+      children: <OutlineManager novelId={currentNovelId} />
+    }
+  ];
   
   return (
     <div className="creative-tools">
@@ -52,54 +98,8 @@ const CreativeTools: React.FC<CreativeToolsProps> = ({ novelId }) => {
             activeKey={activeTab} 
             onChange={handleTabChange}
             type="card"
-          >
-            <TabPane 
-              tab={
-                <span>
-                  <UserOutlined />
-                  人物管理
-                </span>
-              } 
-              key="characters"
-              disabled={!completedFeatures.characters}
-            >
-              {completedFeatures.characters ? (
-                <div>人物管理组件将在此显示</div>
-              ) : (
-                <Alert
-                  message="功能开发中"
-                  description="人物管理功能正在开发中，敬请期待！"
-                  type="info"
-                  showIcon
-                  icon={<UserOutlined />}
-                />
-              )}
-            </TabPane>
-            <TabPane 
-              tab={
-                <span>
-                  <EnvironmentOutlined />
-                  地点管理
-                </span>
-              } 
-              key="locations"
-              disabled={!completedFeatures.locations}
-            >
-              <LocationManager novelId={currentNovelId} />
-            </TabPane>
-            <TabPane 
-              tab={
-                <span>
-                  <OrderedListOutlined />
-                  大纲管理
-                </span>
-              } 
-              key="outlines"
-              disabled={!completedFeatures.outlines}
-            >
-              <OutlineManager novelId={currentNovelId} />
-            </TabPane>
-          </Tabs>
+            items={tabItems}
+          />
         )}
       </Card>
     </div>

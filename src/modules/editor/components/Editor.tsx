@@ -1,22 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Layout, 
-  Button, 
-  Input, 
-  Spin, 
-  message, 
-  Typography, 
-  Tooltip, 
-  Space, 
-  Drawer,
-  Tabs,
-  List,
-  Card,
-  Divider,
-  Statistic,
-  Switch
-} from 'antd';
+import {   Layout,   Button,   Input,   Spin,   Typography,   Tooltip,   Space,   Drawer,  Tabs,  List,  Card,  Divider,  Statistic,  Switch,  App} from 'antd';
 import { 
   SaveOutlined, 
   ArrowLeftOutlined, 
@@ -26,7 +10,10 @@ import {
   EditOutlined,
   FieldTimeOutlined,
   HistoryOutlined,
-  BgColorsOutlined
+  BgColorsOutlined,
+  BookOutlined,
+  MenuFoldOutlined,
+  MenuUnfoldOutlined
 } from '@ant-design/icons';
 import { Editor as DraftEditor } from 'react-draft-wysiwyg';
 import { EditorState, ContentState, convertToRaw } from 'draft-js';
@@ -35,12 +22,12 @@ import draftToHtml from 'draftjs-to-html';
 import 'react-draft-wysiwyg/dist/react-draft-wysiwyg.css';
 import VersionHistory from './VersionHistory';
 import ThemeSelector from './ThemeSelector';
+import EditorSidebar from './EditorSidebar';
 import VersionService from '../services/VersionService';
 import ThemeService from '../services/ThemeService';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
-const { TabPane } = Tabs;
 
 interface Chapter {
   id: string;
@@ -66,6 +53,7 @@ interface Novel {
 const Editor: React.FC = () => {
   const { novelId, chapterId } = useParams<{ novelId: string; chapterId: string }>();
   const navigate = useNavigate();
+  const { message } = App.useApp();
   
   const [chapter, setChapter] = useState<Chapter | null>(null);
   const [novel, setNovel] = useState<Novel | null>(null);
@@ -82,6 +70,7 @@ const Editor: React.FC = () => {
   const [autoSaveEnabled, setAutoSaveEnabled] = useState<boolean>(true);
   const [currentTheme, setCurrentTheme] = useState<string>(ThemeService.getCurrentThemeName());
   const [activeTabKey, setActiveTabKey] = useState<string>('info');
+  const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
   
   // 内容变更标记
   const contentChanged = useRef<boolean>(false);
@@ -131,7 +120,7 @@ const Editor: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [novelId, chapterId, navigate]);
+  }, [novelId, chapterId, navigate, message]);
 
   // 初始加载
   useEffect(() => {
@@ -310,6 +299,11 @@ const Editor: React.FC = () => {
   // 获取主题样式
   const themeStyles = ThemeService.generateThemeStyles();
 
+  // 切换侧边栏显示状态
+  const toggleSidebar = () => {
+    setSidebarVisible(!sidebarVisible);
+  };
+
   // 返回加载中状态
   if (loading) {
     return (
@@ -321,220 +315,230 @@ const Editor: React.FC = () => {
   }
 
   return (
-    <Layout className={isFullscreen ? 'fullscreen-editor' : ''} style={{ height: '100%' }}>
-      <Header style={{ 
-        padding: '0 16px', 
-        background: '#fff', 
-        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between'
-      }}>
-        <div>
-          <Button 
-            icon={<ArrowLeftOutlined />} 
-            onClick={() => navigate(`/novels/${novelId}`)}
-            style={{ marginRight: 16 }}
-          >
-            返回
-          </Button>
-          
-          <Input
-            placeholder="章节标题"
-            value={title}
-            onChange={(e) => {
-              setTitle(e.target.value);
-              contentChanged.current = true;
-            }}
-            style={{ width: 300, marginRight: 16 }}
-          />
-        </div>
-        
-        <div>
-          <Space>
-            <Statistic 
-              value={wordCount} 
-              suffix="字" 
-              style={{ marginRight: 16 }} 
+    <App>
+      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+        <Header style={{ 
+          padding: '0 16px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          background: ThemeService.getThemeColors(currentTheme).headerBg
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <Button 
+              type="text" 
+              icon={<ArrowLeftOutlined />} 
+              onClick={() => navigate(`/novels/${novelId}`)}
+              style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
             />
-            
-            <Tooltip title="自动保存">
-              <Switch 
-                checked={autoSaveEnabled} 
-                onChange={setAutoSaveEnabled} 
-                checkedChildren="自动保存开" 
-                unCheckedChildren="自动保存关"
-                style={{ marginRight: 8 }}
+            <Input 
+              value={title} 
+              onChange={e => {
+                setTitle(e.target.value);
+                contentChanged.current = true;
+              }}
+              placeholder="章节标题"
+              bordered={false}
+              style={{ 
+                width: 300, 
+                marginLeft: 16,
+                color: ThemeService.getThemeColors(currentTheme).headerText,
+                background: 'transparent'
+              }}
+            />
+          </div>
+          <Space>
+            {lastSavedAt && (
+              <span style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}>
+                最后保存: {lastSavedAt.toLocaleTimeString()}
+              </span>
+            )}
+            <Tooltip title="显示/隐藏参考资料">
+              <Button 
+                type="text" 
+                icon={sidebarVisible ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />} 
+                onClick={toggleSidebar}
+                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
               />
             </Tooltip>
-            
+            <Tooltip title="主题设置">
+              <Button 
+                type="text" 
+                icon={<BgColorsOutlined />} 
+                onClick={() => setDrawerVisible(true)}
+                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
+              />
+            </Tooltip>
+            <Tooltip title="版本历史">
+              <Button 
+                type="text" 
+                icon={<HistoryOutlined />} 
+                onClick={() => setActiveTabKey('history')}
+                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
+              />
+            </Tooltip>
+            <Tooltip title="AI助手">
+              <Button 
+                type="text" 
+                icon={<RobotOutlined />} 
+                onClick={() => setAiDrawerVisible(true)}
+                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
+              />
+            </Tooltip>
+            <Tooltip title={isFullscreen ? "退出全屏" : "全屏编辑"}>
+              <Button 
+                type="text" 
+                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
+                onClick={toggleFullscreen}
+                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
+              />
+            </Tooltip>
             <Button 
               type="primary" 
               icon={<SaveOutlined />} 
-              loading={saving}
+              loading={saving} 
               onClick={saveChapter}
-              style={{ marginRight: 8 }}
             >
               保存
             </Button>
-            
-            <Tooltip title="AI助手">
-              <Button 
-                icon={<RobotOutlined />} 
-                onClick={() => setAiDrawerVisible(true)}
-                style={{ marginRight: 8 }}
-              />
-            </Tooltip>
-            
-            <Tooltip title="章节信息">
-              <Button 
-                icon={<EditOutlined />} 
-                onClick={() => {
-                  setActiveTabKey('info');
-                  setDrawerVisible(true);
-                }}
-                style={{ marginRight: 8 }}
-              />
-            </Tooltip>
-            
-            <Tooltip title="版本历史">
-              <Button 
-                icon={<HistoryOutlined />} 
-                onClick={() => {
-                  setActiveTabKey('history');
-                  setDrawerVisible(true);
-                }}
-                style={{ marginRight: 8 }}
-              />
-            </Tooltip>
-            
-            <Tooltip title="主题设置">
-              <Button 
-                icon={<BgColorsOutlined />} 
-                onClick={() => {
-                  setActiveTabKey('theme');
-                  setDrawerVisible(true);
-                }}
-                style={{ marginRight: 8 }}
-              />
-            </Tooltip>
-            
-            <Tooltip title={isFullscreen ? "退出全屏" : "全屏编辑"}>
-              <Button 
-                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
-                onClick={toggleFullscreen}
-              />
-            </Tooltip>
           </Space>
-        </div>
-      </Header>
-      
-      <Content style={{ padding: '16px', overflow: 'auto' }}>
-        <div style={{ 
-          background: '#fff', 
-          padding: '20px', 
-          minHeight: 500,
-          borderRadius: '4px',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-        }}>
-          <DraftEditor
-            editorState={editorState}
-            onEditorStateChange={handleEditorChange}
-            wrapperClassName="editor-wrapper"
-            editorClassName="editor-content"
-            toolbarClassName="editor-toolbar"
-            wrapperStyle={themeStyles.editorWrapper}
-            editorStyle={themeStyles.editorContent}
-            toolbarStyle={themeStyles.editorToolbar}
-            toolbar={{
-              options: ['inline', 'blockType', 'fontSize', 'list', 'textAlign', 'history'],
-              inline: {
-                options: ['bold', 'italic', 'underline', 'strikethrough'],
-              },
-              blockType: {
-                options: ['Normal', 'H1', 'H2', 'H3', 'H4', 'Blockquote'],
-              },
-              textAlign: {
-                options: ['left', 'center', 'right', 'justify'],
-              },
-            }}
-          />
-        </div>
-      </Content>
-      
-      {/* 侧边抽屉 */}
-      <Drawer
-        title="章节信息"
-        placement="right"
-        width={400}
-        onClose={() => setDrawerVisible(false)}
-        open={drawerVisible}
-      >
-        <Tabs 
-          activeKey={activeTabKey} 
-          onChange={setActiveTabKey}
-        >
-          <TabPane tab="基本信息" key="info">
-            <Card>
-              <Statistic 
-                title="字数" 
-                value={wordCount} 
-                suffix="字"
-                prefix={<EditOutlined />}
-                style={{ marginBottom: 16 }}
-              />
-              
-              <Statistic 
-                title="写作时间" 
-                value={writingTime} 
-                suffix="分钟"
-                prefix={<FieldTimeOutlined />}
-                style={{ marginBottom: 16 }}
-              />
-              
-              {lastSavedAt && (
-                <div>
-                  <Divider />
-                  <p>上次保存: {lastSavedAt.toLocaleString()}</p>
+        </Header>
+        <Layout>
+          {sidebarVisible && (
+            <Sider 
+              width={300} 
+              theme={ThemeService.getThemeColors(currentTheme).siderTheme}
+              style={{ 
+                background: ThemeService.getThemeColors(currentTheme).siderBg,
+                borderRight: `1px solid ${ThemeService.getThemeColors(currentTheme).borderColor}`,
+                overflow: 'auto'
+              }}
+            >
+              <div style={{ padding: '16px 0' }}>
+                <div style={{ 
+                  padding: '0 16px', 
+                  marginBottom: 16,
+                  color: ThemeService.getThemeColors(currentTheme).siderText
+                }}>
+                  <Title level={5} style={{ color: ThemeService.getThemeColors(currentTheme).siderText }}>
+                    <BookOutlined /> {novel?.title}
+                  </Title>
+                  <div>章节: {chapter?.title}</div>
                 </div>
-              )}
-            </Card>
-          </TabPane>
-          
-          <TabPane tab="版本历史" key="history">
-            {chapterId && (
-              <VersionHistory 
-                chapterId={chapterId} 
-                onRestoreVersion={handleRestoreVersion} 
-              />
+                <Divider style={{ margin: '8px 0' }} />
+                <EditorSidebar novelId={novelId || ''} />
+              </div>
+            </Sider>
+          )}
+          <Content style={{ 
+            padding: 24, 
+            background: ThemeService.getThemeColors(currentTheme).contentBg,
+            overflow: 'auto'
+          }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '100px 0' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: 16, color: ThemeService.getThemeColors(currentTheme).contentText }}>
+                  加载中...
+                </div>
+              </div>
+            ) : (
+              <div 
+                className={`editor-container ${isFullscreen ? 'fullscreen' : ''}`}
+                style={{ 
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column'
+                }}
+              >
+                <div style={{ flex: 1, overflow: 'auto' }}>
+                  <DraftEditor
+                    editorState={editorState}
+                    onEditorStateChange={handleEditorChange}
+                    wrapperClassName={`editor-wrapper theme-${currentTheme}`}
+                    editorClassName={`editor-content theme-${currentTheme}`}
+                    toolbar={{
+                      options: ['inline', 'blockType', 'fontSize', 'list', 'textAlign', 'colorPicker', 'link', 'history'],
+                      inline: { inDropdown: false },
+                      list: { inDropdown: true },
+                      textAlign: { inDropdown: true },
+                      link: { inDropdown: true },
+                      history: { inDropdown: false },
+                    }}
+                  />
+                </div>
+                <div style={{ 
+                  marginTop: 16, 
+                  display: 'flex', 
+                  justifyContent: 'space-between',
+                  color: ThemeService.getThemeColors(currentTheme).contentText
+                }}>
+                  <div>
+                    <Space>
+                      <Statistic title="字数" value={wordCount} />
+                      <Statistic title="写作时间" value={formatTime(writingTime)} />
+                    </Space>
+                  </div>
+                  <div>
+                    <Space>
+                      <span>自动保存</span>
+                      <Switch checked={autoSaveEnabled} onChange={setAutoSaveEnabled} />
+                    </Space>
+                  </div>
+                </div>
+              </div>
             )}
-          </TabPane>
-          
-          <TabPane tab="主题设置" key="theme">
-            <ThemeSelector onChange={handleThemeChange} />
-          </TabPane>
-          
-          <TabPane tab="大纲" key="outline">
-            <p>此功能尚未实现</p>
-          </TabPane>
-          
-          <TabPane tab="笔记" key="notes">
-            <p>此功能尚未实现</p>
-          </TabPane>
-        </Tabs>
-      </Drawer>
-      
-      {/* AI助手抽屉 */}
-      <Drawer
-        title="AI助手"
-        placement="right"
-        width={400}
-        onClose={() => setAiDrawerVisible(false)}
-        open={aiDrawerVisible}
-      >
-        <p>AI助手功能尚未实现</p>
-      </Drawer>
-    </Layout>
+          </Content>
+        </Layout>
+
+        {/* 主题设置抽屉 */}
+        <Drawer
+          title="设置"
+          placement="right"
+          onClose={() => setDrawerVisible(false)}
+          open={drawerVisible}
+          width={400}
+        >
+          <Tabs activeKey={activeTabKey} onChange={setActiveTabKey} items={[
+            {
+              key: "theme",
+              label: "主题",
+              children: (
+                <ThemeSelector 
+                  currentTheme={currentTheme} 
+                  onThemeChange={handleThemeChange} 
+                />
+              )
+            },
+            {
+              key: "history",
+              label: "历史版本",
+              children: (
+                chapterId && (
+                  <VersionHistory 
+                    chapterId={chapterId} 
+                    onRestore={handleRestoreVersion} 
+                  />
+                )
+              )
+            }
+          ]} />
+        </Drawer>
+
+        {/* AI助手抽屉 */}
+        <Drawer
+          title="AI写作助手"
+          placement="right"
+          onClose={() => setAiDrawerVisible(false)}
+          open={aiDrawerVisible}
+          width={400}
+        >
+          <div style={{ padding: 16 }}>
+            <p>AI写作助手功能即将推出，敬请期待！</p>
+          </div>
+        </Drawer>
+      </Layout>
+    </App>
   );
 };
 

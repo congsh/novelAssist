@@ -9,7 +9,7 @@ import {
   Form, 
   Input, 
   Popconfirm, 
-  message, 
+  App, 
   Spin,
   ColorPicker,
   Select
@@ -22,8 +22,6 @@ import {
 } from '@ant-design/icons';
 import type { TabsProps } from 'antd';
 import type { Color } from 'antd/es/color-picker';
-
-const { TabPane } = Tabs;
 
 interface Tag {
   id: string;
@@ -61,6 +59,9 @@ const TagCategoryManager: React.FC = () => {
   const [categoryModalVisible, setCategoryModalVisible] = useState<boolean>(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   const [categoryForm] = Form.useForm();
+  
+  // 使用App组件的message
+  const { message } = App.useApp();
 
   // 加载标签
   const loadTags = async () => {

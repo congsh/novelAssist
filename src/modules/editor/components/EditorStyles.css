@@ -1,0 +1,47 @@
+/* 编辑器侧边栏样式 */
+.editor-sidebar {
+  height: 100%;
+  overflow: hidden;
+}
+
+.editor-sidebar .ant-tabs-content {
+  height: 100%;
+  overflow: auto;
+}
+
+/* 主题相关样式 */
+.theme-light .editor-content {
+  color: #333;
+  background-color: #fff;
+}
+
+.theme-dark .editor-content {
+  color: #eee;
+  background-color: #1f1f1f;
+}
+
+.theme-sepia .editor-content {
+  color: #5b4636;
+  background-color: #f4ecd8;
+}
+
+/* 大纲树样式 */
+.outline-tree .ant-tree-node-content-wrapper {
+  width: 100%;
+}
+
+/* 列表项样式 */
+.editor-sidebar .ant-list-item {
+  padding: 8px;
+  border-radius: 4px;
+  transition: background-color 0.3s;
+}
+
+.editor-sidebar .ant-list-item:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+/* 折叠面板样式 */
+.editor-sidebar .ant-collapse-ghost > .ant-collapse-item > .ant-collapse-content > .ant-collapse-content-box {
+  padding: 0 8px 8px;
+} 

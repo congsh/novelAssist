@@ -15,6 +15,17 @@ interface ThemeStyles {
   editorToolbar: React.CSSProperties;
 }
 
+interface ThemeColors {
+  headerBg: string;
+  headerText: string;
+  siderBg: string;
+  siderText: string;
+  contentBg: string;
+  contentText: string;
+  borderColor: string;
+  siderTheme: 'light' | 'dark';
+}
+
 /**
  * 编辑器主题服务
  * 用于处理编辑器主题的切换和保存
@@ -99,6 +110,64 @@ class ThemeService {
       return this.themes[themeName];
     }
     return this.themes[this.currentTheme];
+  }
+
+  /**
+   * 获取主题颜色
+   * @param themeName - 主题名称，不传则使用当前主题
+   * @returns 主题颜色对象
+   */
+  getThemeColors(themeName?: string): ThemeColors {
+    const theme = themeName ? this.themes[themeName] || this.getCurrentTheme() : this.getCurrentTheme();
+    
+    // 根据主题不同，返回不同的颜色配置
+    switch (themeName || this.currentTheme) {
+      case 'dark':
+        return {
+          headerBg: '#1e1e1e',
+          headerText: '#e0e0e0',
+          siderBg: '#2d2d2d',
+          siderText: '#e0e0e0',
+          contentBg: '#1e1e1e',
+          contentText: '#e0e0e0',
+          borderColor: '#3e3e3e',
+          siderTheme: 'dark'
+        };
+      case 'sepia':
+        return {
+          headerBg: '#eee4d2',
+          headerText: '#5b4636',
+          siderBg: '#f8f2e3',
+          siderText: '#5b4636',
+          contentBg: '#f8f2e3',
+          contentText: '#5b4636',
+          borderColor: '#e0d6c2',
+          siderTheme: 'light'
+        };
+      case 'blue':
+        return {
+          headerBg: '#d9ebf7',
+          headerText: '#333333',
+          siderBg: '#eef6fb',
+          siderText: '#333333',
+          contentBg: '#eef6fb',
+          contentText: '#333333',
+          borderColor: '#c0ddf1',
+          siderTheme: 'light'
+        };
+      case 'light':
+      default:
+        return {
+          headerBg: '#ffffff',
+          headerText: '#333333',
+          siderBg: '#f5f5f5',
+          siderText: '#333333',
+          contentBg: '#ffffff',
+          contentText: '#333333',
+          borderColor: '#e8e8e8',
+          siderTheme: 'light'
+        };
+    }
   }
 
   /**

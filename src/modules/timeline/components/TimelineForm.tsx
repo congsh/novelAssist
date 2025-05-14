@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Button, Select, DatePicker, message } from 'antd';
+import { Form, Input, Button, Select, DatePicker, App } from 'antd';
 import { FieldTimeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { 
@@ -36,6 +36,7 @@ const TimelineForm: React.FC<TimelineFormProps> = ({
   const [loading, setLoading] = useState(false);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
+  const { message } = App.useApp();
   
   // 获取人物和地点数据
   useEffect(() => {

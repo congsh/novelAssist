@@ -61,7 +61,7 @@ const OutlineForm: React.FC<OutlineFormProps> = ({
       form.setFieldsValue({
         title: outline.title,
         content: outline.content,
-        parent_id: outline.parent_id,
+        parent_id: outline.parent_id || '',
         sort_order: outline.sort_order,
         status: outline.status,
         metadata: outline.metadata
@@ -69,7 +69,7 @@ const OutlineForm: React.FC<OutlineFormProps> = ({
     } else {
       form.resetFields();
       form.setFieldsValue({
-        parent_id: parentId || null,
+        parent_id: parentId || '',
         status: OutlineStatus.ACTIVE,
         sort_order: 1
       });
@@ -165,7 +165,7 @@ const OutlineForm: React.FC<OutlineFormProps> = ({
             showSearch
             optionFilterProp="children"
           >
-            <Option value={null}>无父级（顶级大纲）</Option>
+            <Option value="">无父级（顶级大纲）</Option>
             {filteredOutlines.map(item => (
               <Option key={item.id} value={item.id}>{item.title}</Option>
             ))}

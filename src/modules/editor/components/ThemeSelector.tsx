@@ -7,7 +7,8 @@ import ThemeService from '../services/ThemeService';
 const { Title } = Typography;
 
 interface ThemeSelectorProps {
-  onChange: (themeName: string) => void;
+  currentTheme: string;
+  onThemeChange: (themeName: string) => void;
 }
 
 interface ThemeConfig {
@@ -27,16 +28,23 @@ interface ThemeMap {
  * 主题选择器组件
  * 用于切换编辑器主题
  */
-const ThemeSelector: React.FC<ThemeSelectorProps> = ({ onChange }) => {
-  const [currentTheme, setCurrentTheme] = useState<string>(ThemeService.getCurrentThemeName());
+const ThemeSelector: React.FC<ThemeSelectorProps> = ({ currentTheme: propCurrentTheme, onThemeChange }) => {
+  const [currentTheme, setCurrentTheme] = useState<string>(propCurrentTheme || ThemeService.getCurrentThemeName());
   const themes = ThemeService.getAllThemes() as ThemeMap;
+
+  // 当属性变化时更新状态
+  useEffect(() => {
+    if (propCurrentTheme && propCurrentTheme !== currentTheme) {
+      setCurrentTheme(propCurrentTheme);
+    }
+  }, [propCurrentTheme]);
 
   // 处理主题变化
   const handleThemeChange = (e: RadioChangeEvent) => {
     const themeName = e.target.value;
     setCurrentTheme(themeName);
     ThemeService.setTheme(themeName);
-    onChange(themeName);
+    onThemeChange(themeName);
   };
 
   return (
