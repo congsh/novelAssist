@@ -191,8 +191,12 @@ require('./ipc/outline-handler');
 const { initCharacterHandlers } = require('./ipc/character-handler');
 const { initTimelineHandlers } = require('./ipc/timeline-handler');
 const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
+const { initBackupHandlers } = require('./ipc/backup-handler');
+const { initStatisticsHandlers } = require('./ipc/statistics-handler');
 
 // 初始化人物和时间线IPC处理器
 initCharacterHandlers();
 initTimelineHandlers();
-initNovelAssociationHandlers(); 
+initNovelAssociationHandlers();
+initBackupHandlers();
+initStatisticsHandlers(); 

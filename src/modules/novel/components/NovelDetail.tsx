@@ -24,7 +24,9 @@ import {
   Row,
   Col,
   Avatar,
-  App
+  App,
+  Progress,
+  Statistic
 } from 'antd';
 import { 
   EditOutlined, 
@@ -42,7 +44,9 @@ import {
   UserOutlined,
   EnvironmentOutlined,
   OrderedListOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  BarChartOutlined,
+  CloudUploadOutlined
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { novelAssociationService } from '../services/novelAssociationService';
@@ -187,6 +191,9 @@ const NovelDetail: React.FC = () => {
   const [availableOutlines, setAvailableOutlines] = useState<Outline[]>([]);
   const [availableTimelineEvents, setAvailableTimelineEvents] = useState<TimelineEvent[]>([]);
   const { message: appMessage, modal } = App.useApp();
+  const [statisticsLoading, setStatisticsLoading] = useState<boolean>(false);
+  const [statistics, setStatistics] = useState<any>(null);
+  const [backupLoading, setBackupLoading] = useState<boolean>(false);
 
   // 加载小说详情
   const loadNovelData = async () => {
@@ -210,6 +217,9 @@ const NovelDetail: React.FC = () => {
         loadNovelLocations(novelResponse.data.id);
         loadNovelOutlines(novelResponse.data.id);
         loadNovelTimelineEvents(novelResponse.data.id);
+        
+        // 加载小说统计数据
+        loadNovelStatistics(novelResponse.data.id);
       } else {
         appMessage.error(novelResponse.error || '获取小说详情失败');
         navigate('/novels');
@@ -392,6 +402,45 @@ const NovelDetail: React.FC = () => {
     } catch (error) {
       console.error('获取可关联的时间线事件失败:', error);
       appMessage.error('获取可关联的时间线事件失败');
+    }
+  };
+
+  // 加载小说统计数据
+  const loadNovelStatistics = async (novelId: string) => {
+    if (!novelId) return;
+    
+    setStatisticsLoading(true);
+    try {
+      const result = await window.electron.invoke('get-novel-statistics', { novelId });
+      if (result.success) {
+        setStatistics(result.data);
+      } else {
+        appMessage.error(result.error || '获取小说统计数据失败');
+      }
+    } catch (error) {
+      console.error('获取小说统计数据失败:', error);
+      appMessage.error('获取小说统计数据失败');
+    } finally {
+      setStatisticsLoading(false);
+    }
+  };
+
+  // 创建小说备份
+  const handleCreateBackup = async () => {
+    try {
+      setBackupLoading(true);
+      const result = await window.electron.invoke('create-backup');
+      
+      if (result.success) {
+        appMessage.success(result.message);
+      } else {
+        appMessage.error(result.error || '创建备份失败');
+      }
+    } catch (error) {
+      console.error('创建备份失败:', error);
+      appMessage.error('创建备份失败，请稍后重试');
+    } finally {
+      setBackupLoading(false);
     }
   };
 
@@ -1440,6 +1489,95 @@ const NovelDetail: React.FC = () => {
     }
   };
 
+  // 渲染统计信息
+  const renderStatistics = () => {
+    if (!statistics) {
+      return (
+        <div style={{ textAlign: 'center', padding: '20px 0' }}>
+          <Spin spinning={statisticsLoading} />
+          <Paragraph style={{ marginTop: 10 }}>加载统计数据中...</Paragraph>
+        </div>
+      );
+    }
+    
+    const { statistics: stats } = statistics;
+    
+    return (
+      <div>
+        <Row gutter={[16, 16]}>
+          <Col span={24}>
+            <Progress
+              percent={stats.progressPercentage}
+              status="active"
+              format={percent => `${percent}% 完成`}
+              style={{ marginBottom: 16 }}
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="当前字数" 
+              value={stats.currentWordCount} 
+              suffix="字" 
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="目标字数" 
+              value={stats.targetWordCount} 
+              suffix="字"
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="章节数量" 
+              value={stats.chapterCount}
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="平均章节字数" 
+              value={stats.avgWordsPerChapter} 
+              suffix="字/章"
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="人物数量" 
+              value={stats.characterCount}
+            />
+          </Col>
+          
+          <Col xs={24} sm={8}>
+            <Statistic 
+              title="地点数量" 
+              value={stats.locationCount}
+            />
+          </Col>
+        </Row>
+        
+        <Divider />
+        
+        <Row>
+          <Col span={24} style={{ textAlign: 'center' }}>
+            <Button 
+              type="primary"
+              icon={<BarChartOutlined />}
+              onClick={() => navigate('/statistics')}
+            >
+              查看更多统计数据
+            </Button>
+          </Col>
+        </Row>
+      </div>
+    );
+  };
+
   // 修改Tab内容，添加关联内容标签页
   const items = [
     {
@@ -1594,20 +1732,30 @@ const NovelDetail: React.FC = () => {
             menu={{
               items: [
                 {
-                  key: 'txt',
-                  label: '导出为TXT文本',
-                  onClick: () => handleExportNovel('txt')
+                  key: 'epub',
+                  label: '导出为EPUB',
+                  onClick: () => handleExportNovel('epub'),
                 },
                 {
-                  key: 'json',
-                  label: '导出为JSON格式',
-                  onClick: () => handleExportNovel('json')
-                }
-              ]
+                  key: 'pdf',
+                  label: '导出为PDF',
+                  onClick: () => handleExportNovel('pdf'),
+                },
+                {
+                  key: 'docx',
+                  label: '导出为Word文档',
+                  onClick: () => handleExportNovel('docx'),
+                },
+                {
+                  key: 'txt',
+                  label: '导出为纯文本',
+                  onClick: () => handleExportNovel('txt'),
+                },
+              ],
             }}
           >
-            <Button icon={<ExportOutlined />} loading={exportLoading} style={{ marginRight: 8 }}>
-              导出小说 <DownOutlined />
+            <Button loading={exportLoading} icon={<ExportOutlined />}>
+              导出 <DownOutlined />
             </Button>
           </Dropdown>
 
@@ -1692,9 +1840,11 @@ const NovelDetail: React.FC = () => {
               label="状态"
             >
               <Select>
-                <Option value="planning">计划中</Option>
-                <Option value="in_progress">进行中</Option>
+                <Option value="planning">规划中</Option>
+                <Option value="writing">写作中</Option>
+                <Option value="revising">修改中</Option>
                 <Option value="completed">已完成</Option>
+                <Option value="published">已发布</Option>
                 <Option value="abandoned">已放弃</Option>
               </Select>
             </Form.Item>

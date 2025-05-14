@@ -15,7 +15,8 @@ import {
   RobotOutlined,
   BulbOutlined,
   BulbFilled,
-  TagOutlined
+  TagOutlined,
+  CloudOutlined
 } from '@ant-design/icons';
 
 const { Header, Sider, Content } = Layout;
@@ -111,6 +112,12 @@ const MainLayout: React.FC<MainLayoutProps> = ({ toggleTheme, isDarkMode }) => {
       icon: <RobotOutlined />,
       label: 'AI助手',
       onClick: () => handleMenuClick('/ai')
+    },
+    {
+      key: '/backup',
+      icon: <CloudOutlined />,
+      label: '备份与恢复',
+      onClick: () => handleMenuClick('/backup')
     }
   ];
 
