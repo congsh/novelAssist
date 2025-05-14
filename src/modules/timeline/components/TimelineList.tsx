@@ -36,12 +36,14 @@ const TimelineList: React.FC<TimelineListProps> = ({
     try {
       setLoading(true);
       
-      // 获取事件列表
-      const eventsData = await timelineService.getTimelineEvents({ novel_id: novelId });
-      setEvents(eventsData);
+      // 获取所有时间线事件，不仅仅是关联到当前小说的
+      const allEvents = await timelineService.getTimelineEvents();
+      
+      // 使用所有时间线事件
+      setEvents(allEvents);
       
       // 获取人物列表并转换为字典
-      const charactersData = await characterService.getCharacters({ novel_id: novelId });
+      const charactersData = await characterService.getCharacters();
       const charactersMap: Record<string, Character> = {};
       charactersData.forEach(character => {
         charactersMap[character.id] = character;
@@ -49,7 +51,7 @@ const TimelineList: React.FC<TimelineListProps> = ({
       setCharacters(charactersMap);
       
       // 获取地点列表并转换为字典
-      const locationsData = await locationService.getLocations({ novel_id: novelId });
+      const locationsData = await locationService.getLocations();
       const locationsMap: Record<string, Location> = {};
       locationsData.forEach(location => {
         locationsMap[location.id] = location;

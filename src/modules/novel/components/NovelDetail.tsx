@@ -22,7 +22,9 @@ import {
   Tree,
   Tag,
   Row,
-  Col
+  Col,
+  Avatar,
+  App
 } from 'antd';
 import { 
   EditOutlined, 
@@ -36,9 +38,15 @@ import {
   DragOutlined,
   MenuOutlined,
   TagOutlined,
-  FolderOutlined
+  FolderOutlined,
+  UserOutlined,
+  EnvironmentOutlined,
+  OrderedListOutlined,
+  HistoryOutlined
 } from '@ant-design/icons';
 import type { DataNode, TreeProps } from 'antd/es/tree';
+import { novelAssociationService } from '../services/novelAssociationService';
+import { characterService } from '../../character/services/characterService';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -92,6 +100,54 @@ interface TreeNode extends DataNode {
   isLeaf?: boolean;
 }
 
+// 添加Character接口
+interface Character {
+  id: string;
+  novel_id: string;
+  name: string;
+  role: string;
+  description?: string;
+  background?: string;
+  personality?: string;
+  appearance?: string;
+  image_path?: string;
+}
+
+// 添加Location接口
+interface Location {
+  id: string;
+  novel_id: string;
+  name: string;
+  description?: string;
+  importance?: string;
+  image_path?: string;
+  coordinates?: string;
+}
+
+// 添加TimelineEvent接口
+interface TimelineEvent {
+  id: string;
+  novel_id: string;
+  title: string;
+  description?: string;
+  event_date?: string;
+  importance?: string;
+  character_ids?: string;
+  location_id?: string;
+}
+
+// 添加Outline接口
+interface Outline {
+  id: string;
+  novel_id: string;
+  title: string;
+  content?: string;
+  sort_order: number;
+  parent_id?: string | null;
+  status?: string;
+  children?: Outline[];
+}
+
 /**
  * 小说详情组件
  */
@@ -114,6 +170,23 @@ const NovelDetail: React.FC = () => {
   const [form] = Form.useForm();
   const [chapterForm] = Form.useForm();
   const [categoryForm] = Form.useForm();
+  const [characters, setCharacters] = useState<Character[]>([]);
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [outlines, setOutlines] = useState<Outline[]>([]);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
+  const [availableCharacters, setAvailableCharacters] = useState<Character[]>([]);
+  const [isCharacterModalVisible, setIsCharacterModalVisible] = useState<boolean>(false);
+  const [isLocationModalVisible, setIsLocationModalVisible] = useState<boolean>(false);
+  const [selectedCharacterId, setSelectedCharacterId] = useState<string>('');
+  const [selectedLocationId, setSelectedLocationId] = useState<string>('');
+  const [availableLocations, setAvailableLocations] = useState<Location[]>([]);
+  const [isOutlineModalVisible, setIsOutlineModalVisible] = useState<boolean>(false);
+  const [isTimelineModalVisible, setIsTimelineModalVisible] = useState<boolean>(false);
+  const [selectedOutlineId, setSelectedOutlineId] = useState<string>('');
+  const [selectedTimelineEventId, setSelectedTimelineEventId] = useState<string>('');
+  const [availableOutlines, setAvailableOutlines] = useState<Outline[]>([]);
+  const [availableTimelineEvents, setAvailableTimelineEvents] = useState<TimelineEvent[]>([]);
+  const { message: appMessage, modal } = App.useApp();
 
   // 加载小说详情
   const loadNovelData = async () => {
@@ -131,8 +204,14 @@ const NovelDetail: React.FC = () => {
         
         // 获取小说标签
         loadNovelTags(novelResponse.data.id);
+        
+        // 获取小说关联的人物、地点、大纲和时间线
+        loadNovelCharacters(novelResponse.data.id);
+        loadNovelLocations(novelResponse.data.id);
+        loadNovelOutlines(novelResponse.data.id);
+        loadNovelTimelineEvents(novelResponse.data.id);
       } else {
-        message.error(novelResponse.error || '获取小说详情失败');
+        appMessage.error(novelResponse.error || '获取小说详情失败');
         navigate('/novels');
         return;
       }
@@ -144,11 +223,11 @@ const NovelDetail: React.FC = () => {
         // 构建章节树形结构
         buildChapterTree(chaptersResponse.data);
       } else {
-        message.error(chaptersResponse.error || '获取章节列表失败');
+        appMessage.error(chaptersResponse.error || '获取章节列表失败');
       }
     } catch (error) {
       console.error('加载小说数据失败:', error);
-      message.error('加载小说数据失败');
+      appMessage.error('加载小说数据失败');
       navigate('/novels');
     } finally {
       setLoading(false);
@@ -162,11 +241,11 @@ const NovelDetail: React.FC = () => {
       if (response.success) {
         setCategories(response.data);
       } else {
-        message.error(response.error || '获取分类列表失败');
+        appMessage.error(response.error || '获取分类列表失败');
       }
     } catch (error) {
       console.error('获取分类列表失败:', error);
-      message.error('获取分类列表失败');
+      appMessage.error('获取分类列表失败');
     }
   };
 
@@ -177,11 +256,11 @@ const NovelDetail: React.FC = () => {
       if (response.success) {
         setTags(response.data);
       } else {
-        message.error(response.error || '获取标签列表失败');
+        appMessage.error(response.error || '获取标签列表失败');
       }
     } catch (error) {
       console.error('获取标签列表失败:', error);
-      message.error('获取标签列表失败');
+      appMessage.error('获取标签列表失败');
     }
   };
 
@@ -192,11 +271,11 @@ const NovelDetail: React.FC = () => {
       if (response.success) {
         setCategory(response.data);
       } else {
-        message.error(response.error || '获取小说分类失败');
+        appMessage.error(response.error || '获取小说分类失败');
       }
     } catch (error) {
       console.error('获取小说分类失败:', error);
-      message.error('获取小说分类失败');
+      appMessage.error('获取小说分类失败');
     }
   };
 
@@ -207,11 +286,112 @@ const NovelDetail: React.FC = () => {
       if (response.success) {
         setNovelTags(response.data);
       } else {
-        message.error(response.error || '获取小说标签失败');
+        appMessage.error(response.error || '获取小说标签失败');
       }
     } catch (error) {
       console.error('获取小说标签失败:', error);
-      message.error('获取小说标签失败');
+      appMessage.error('获取小说标签失败');
+    }
+  };
+
+  // 加载小说关联的人物
+  const loadNovelCharacters = async (novelId: string) => {
+    try {
+      const response = await novelAssociationService.getNovelCharacters(novelId);
+      setCharacters(response);
+    } catch (error) {
+      console.error('获取小说关联的人物失败:', error);
+      appMessage.error('获取小说关联的人物失败');
+    }
+  };
+  
+  // 加载小说关联的地点
+  const loadNovelLocations = async (novelId: string) => {
+    try {
+      const response = await novelAssociationService.getNovelLocations(novelId);
+      setLocations(response);
+    } catch (error) {
+      console.error('获取小说关联的地点失败:', error);
+      appMessage.error('获取小说关联的地点失败');
+    }
+  };
+  
+  // 加载小说关联的大纲
+  const loadNovelOutlines = async (novelId: string) => {
+    try {
+      const response = await novelAssociationService.getNovelOutlines(novelId);
+      // 大纲已经是树状结构，直接设置
+      setOutlines(response);
+    } catch (error) {
+      console.error('获取小说关联的大纲失败:', error);
+      appMessage.error('获取小说关联的大纲失败');
+    }
+  };
+  
+  // 加载小说关联的时间线事件
+  const loadNovelTimelineEvents = async (novelId: string) => {
+    try {
+      const response = await novelAssociationService.getNovelTimelineEvents(novelId);
+      setTimelineEvents(response);
+    } catch (error) {
+      console.error('获取小说关联的时间线事件失败:', error);
+      appMessage.error('获取小说关联的时间线事件失败');
+    }
+  };
+  
+  // 加载可关联的人物
+  const loadAvailableCharacters = async () => {
+    try {
+      const response = await characterService.getCharacters();
+      // 过滤掉已关联的人物
+      const characterIds = characters.map(c => c.id);
+      const available = response.filter(c => !characterIds.includes(c.id));
+      setAvailableCharacters(available);
+    } catch (error) {
+      console.error('获取可关联的人物失败:', error);
+      appMessage.error('获取可关联的人物失败');
+    }
+  };
+
+  // 加载可关联的地点
+  const loadAvailableLocations = async () => {
+    try {
+      const response = await window.electron.invoke('get-locations');
+      if (response.success) {
+        // 过滤掉已关联的地点
+        const locationIds = locations.map(l => l.id);
+        const available = response.data.filter((l: Location) => !locationIds.includes(l.id));
+        setAvailableLocations(available);
+      } else {
+        appMessage.error(response.error || '获取可关联的地点失败');
+      }
+    } catch (error) {
+      console.error('获取可关联的地点失败:', error);
+      appMessage.error('获取可关联的地点失败');
+    }
+  };
+
+  // 加载可关联的大纲
+  const loadAvailableOutlines = async () => {
+    try {
+      if (!id) return;
+      const available = await novelAssociationService.getAvailableOutlines(id);
+      setAvailableOutlines(available);
+    } catch (error) {
+      console.error('获取可关联的大纲失败:', error);
+      appMessage.error('获取可关联的大纲失败');
+    }
+  };
+
+  // 加载可关联的时间线事件
+  const loadAvailableTimelineEvents = async () => {
+    try {
+      if (!id) return;
+      const available = await novelAssociationService.getAvailableTimelineEvents(id);
+      setAvailableTimelineEvents(available);
+    } catch (error) {
+      console.error('获取可关联的时间线事件失败:', error);
+      appMessage.error('获取可关联的时间线事件失败');
     }
   };
 
@@ -440,12 +620,12 @@ const NovelDetail: React.FC = () => {
       });
       
       if (!response.success) {
-        message.error('更新章节排序失败');
+        appMessage.error('更新章节排序失败');
         loadNovelData(); // 重新加载数据
       }
     } catch (error) {
       console.error('更新章节排序失败:', error);
-      message.error('更新章节排序失败');
+      appMessage.error('更新章节排序失败');
       loadNovelData(); // 重新加载数据
     }
   };
@@ -477,11 +657,11 @@ const NovelDetail: React.FC = () => {
       });
       
       if (response.success) {
-        message.success('小说更新成功');
+        appMessage.success('小说更新成功');
         setIsEditModalVisible(false);
         setNovel(response.data);
       } else {
-        message.error(response.error || '小说更新失败');
+        appMessage.error(response.error || '小说更新失败');
       }
     } catch (error) {
       console.error('表单验证失败:', error);
@@ -513,14 +693,14 @@ const NovelDetail: React.FC = () => {
       });
       
       if (response.success) {
-        message.success('章节创建成功');
+        appMessage.success('章节创建成功');
         setIsChapterModalVisible(false);
         loadNovelData();
         
         // 导航到章节编辑页面
         navigate(`/novels/${id}/chapters/${response.data.id}`);
       } else {
-        message.error(response.error || '章节创建失败');
+        appMessage.error(response.error || '章节创建失败');
       }
     } catch (error) {
       console.error('表单验证失败:', error);
@@ -538,14 +718,14 @@ const NovelDetail: React.FC = () => {
       const response = await window.electron.invoke('delete-chapter', { id: chapterId });
       
       if (response.success) {
-        message.success('章节删除成功');
+        appMessage.success('章节删除成功');
         loadNovelData();
       } else {
-        message.error(response.error || '章节删除失败');
+        appMessage.error(response.error || '章节删除失败');
       }
     } catch (error) {
       console.error('删除章节失败:', error);
-      message.error('删除章节失败');
+      appMessage.error('删除章节失败');
     }
   };
 
@@ -582,13 +762,13 @@ const NovelDetail: React.FC = () => {
       const response = await window.electron.invoke('export-novel', { id, format });
       
       if (response.success) {
-        message.success(`小说已成功导出至: ${response.filePath}`);
+        appMessage.success(`小说已成功导出至: ${response.filePath}`);
       } else {
-        message.error(response.error || '小说导出失败');
+        appMessage.error(response.error || '小说导出失败');
       }
     } catch (error) {
       console.error('导出小说失败:', error);
-      message.error('导出小说失败');
+      appMessage.error('导出小说失败');
     } finally {
       setExportLoading(false);
     }
@@ -616,11 +796,11 @@ const NovelDetail: React.FC = () => {
       });
       
       if (response.success) {
-        message.success('小说分类设置成功');
+        appMessage.success('小说分类设置成功');
         setIsCategoryModalVisible(false);
         loadNovelCategory(id);
       } else {
-        message.error(response.error || '小说分类设置失败');
+        appMessage.error(response.error || '小说分类设置失败');
       }
     } catch (error) {
       console.error('表单验证失败:', error);
@@ -653,14 +833,14 @@ const NovelDetail: React.FC = () => {
       });
       
       if (response.success) {
-        message.success('标签添加成功');
+        appMessage.success('标签添加成功');
         loadNovelTags(id);
       } else {
-        message.error(response.error || '标签添加失败');
+        appMessage.error(response.error || '标签添加失败');
       }
     } catch (error) {
       console.error('添加标签失败:', error);
-      message.error('添加标签失败');
+      appMessage.error('添加标签失败');
     }
   };
 
@@ -675,14 +855,14 @@ const NovelDetail: React.FC = () => {
       });
       
       if (response.success) {
-        message.success('标签移除成功');
+        appMessage.success('标签移除成功');
         loadNovelTags(id);
       } else {
-        message.error(response.error || '标签移除失败');
+        appMessage.error(response.error || '标签移除失败');
       }
     } catch (error) {
       console.error('移除标签失败:', error);
-      message.error('移除标签失败');
+      appMessage.error('移除标签失败');
     }
   };
 
@@ -709,6 +889,653 @@ const NovelDetail: React.FC = () => {
     );
   };
 
+  // 显示关联人物模态框
+  const showCharacterModal = () => {
+    loadAvailableCharacters();
+    setIsCharacterModalVisible(true);
+  };
+  
+  // 处理关联人物
+  const handleCharacterOk = async () => {
+    if (!selectedCharacterId || !id) {
+      appMessage.error('请选择要关联的人物');
+      return;
+    }
+    
+    try {
+      await novelAssociationService.associateCharacter(id, selectedCharacterId);
+      appMessage.success('关联人物成功');
+      loadNovelCharacters(id);
+      setIsCharacterModalVisible(false);
+      setSelectedCharacterId('');
+    } catch (error) {
+      console.error('关联人物失败:', error);
+      appMessage.error('关联人物失败');
+    }
+  };
+  
+  // 处理取消关联人物
+  const handleCharacterCancel = () => {
+    setIsCharacterModalVisible(false);
+    setSelectedCharacterId('');
+  };
+  
+  // 解除人物关联
+  const handleDisassociateCharacter = async (characterId: string) => {
+    if (!id) return;
+    
+    try {
+      await novelAssociationService.disassociateCharacter(id, characterId);
+      appMessage.success('解除人物关联成功');
+      loadNovelCharacters(id);
+    } catch (error) {
+      console.error('解除人物关联失败:', error);
+      appMessage.error('解除人物关联失败');
+    }
+  };
+  
+  // 渲染关联的人物列表
+  const renderCharacters = () => {
+    return (
+      <div>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+          <Typography.Title level={4}>人物</Typography.Title>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={showCharacterModal}
+          >
+            关联人物
+          </Button>
+        </div>
+        
+        {characters.length > 0 ? (
+          <List
+            grid={{ gutter: 16, column: 3 }}
+            dataSource={characters}
+            renderItem={character => (
+              <List.Item>
+                <Card
+                  actions={[
+                    <Link to={`/characters/${character.id}`}>
+                      <Button type="link" icon={<EditOutlined />}>查看</Button>
+                    </Link>,
+                    <Popconfirm
+                      title="确定要解除此人物关联吗？"
+                      onConfirm={() => handleDisassociateCharacter(character.id)}
+                      okText="确定"
+                      cancelText="取消"
+                    >
+                      <Button type="link" danger icon={<DeleteOutlined />}>解除关联</Button>
+                    </Popconfirm>
+                  ]}
+                >
+                  <Card.Meta
+                    avatar={
+                      <Avatar 
+                        icon={<UserOutlined />} 
+                        src={character.image_path} 
+                        size={64}
+                      />
+                    }
+                    title={character.name}
+                    description={
+                      <>
+                        <div><strong>角色:</strong> {character.role}</div>
+                        <div>{character.description ? `${character.description.substring(0, 50)}${character.description.length > 50 ? '...' : ''}` : '无描述'}</div>
+                      </>
+                    }
+                  />
+                </Card>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="暂无关联人物" />
+        )}
+        
+        <Modal
+          title="关联人物"
+          open={isCharacterModalVisible}
+          onOk={handleCharacterOk}
+          onCancel={handleCharacterCancel}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Form layout="vertical">
+            <Form.Item label="选择人物" required>
+              <Select
+                placeholder="请选择要关联的人物"
+                value={selectedCharacterId}
+                onChange={value => setSelectedCharacterId(value)}
+                style={{ width: '100%' }}
+              >
+                {availableCharacters.map(character => (
+                  <Select.Option key={character.id} value={character.id}>
+                    {character.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    );
+  };
+  
+  // 显示关联地点模态框
+  const showLocationModal = () => {
+    loadAvailableLocations();
+    setIsLocationModalVisible(true);
+  };
+
+  // 处理关联地点
+  const handleLocationOk = async () => {
+    if (!selectedLocationId || !id) {
+      appMessage.error('请选择要关联的地点');
+      return;
+    }
+    
+    try {
+      await novelAssociationService.associateLocation(id, selectedLocationId);
+      appMessage.success('关联地点成功');
+      loadNovelLocations(id);
+      setIsLocationModalVisible(false);
+      setSelectedLocationId('');
+    } catch (error) {
+      console.error('关联地点失败:', error);
+      appMessage.error('关联地点失败');
+    }
+  };
+
+  // 处理取消关联地点
+  const handleLocationCancel = () => {
+    setIsLocationModalVisible(false);
+    setSelectedLocationId('');
+  };
+
+  // 解除地点关联
+  const handleDisassociateLocation = async (locationId: string) => {
+    if (!id) return;
+    
+    try {
+      await novelAssociationService.disassociateLocation(id, locationId);
+      appMessage.success('解除地点关联成功');
+      loadNovelLocations(id);
+    } catch (error) {
+      console.error('解除地点关联失败:', error);
+      appMessage.error('解除地点关联失败');
+    }
+  };
+
+  // 渲染关联的地点列表
+  const renderLocations = () => {
+    return (
+      <div>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+          <Typography.Title level={4}>地点</Typography.Title>
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={showLocationModal}
+          >
+            关联地点
+          </Button>
+        </div>
+        
+        {locations.length > 0 ? (
+          <List
+            grid={{ gutter: 16, column: 3 }}
+            dataSource={locations}
+            renderItem={location => (
+              <List.Item>
+                <Card
+                  actions={[
+                    <Link to={`/locations/${location.id}`}>
+                      <Button type="link" icon={<EditOutlined />}>查看</Button>
+                    </Link>,
+                    <Popconfirm
+                      title="确定要解除此地点关联吗？"
+                      onConfirm={() => handleDisassociateLocation(location.id)}
+                      okText="确定"
+                      cancelText="取消"
+                    >
+                      <Button type="link" danger icon={<DeleteOutlined />}>解除关联</Button>
+                    </Popconfirm>
+                  ]}
+                >
+                  <Card.Meta
+                    avatar={
+                      <Avatar 
+                        icon={<EnvironmentOutlined />} 
+                        src={location.image_path} 
+                        size={64}
+                      />
+                    }
+                    title={location.name}
+                    description={
+                      <>
+                        <div><strong>重要性:</strong> {location.importance || '一般'}</div>
+                        <div>{location.description ? `${location.description.substring(0, 50)}${location.description.length > 50 ? '...' : ''}` : '无描述'}</div>
+                      </>
+                    }
+                  />
+                </Card>
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="暂无关联地点" />
+        )}
+
+        <Modal
+          title="关联地点"
+          open={isLocationModalVisible}
+          onOk={handleLocationOk}
+          onCancel={handleLocationCancel}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Form layout="vertical">
+            <Form.Item label="选择地点" required>
+              <Select
+                placeholder="请选择要关联的地点"
+                value={selectedLocationId}
+                onChange={value => setSelectedLocationId(value)}
+                style={{ width: '100%' }}
+              >
+                {availableLocations.map(location => (
+                  <Select.Option key={location.id} value={location.id}>
+                    {location.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    );
+  };
+  
+  // 渲染关联的大纲列表
+  const renderOutlines = () => {
+    // 将大纲树转换为Tree组件需要的格式
+    const convertToTreeData = (nodes: Outline[]): DataNode[] => {
+      return nodes.map(node => ({
+        key: node.id,
+        title: (
+          <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%' }}>
+            <span>{node.title}</span>
+            <Space>
+              <Link to={`/outlines/${node.id}`}>
+                <Button type="link" size="small" icon={<EditOutlined />}>查看</Button>
+              </Link>
+              <Popconfirm
+                title="确定要解除此大纲关联吗？"
+                onConfirm={() => handleDisassociateOutline(node.id)}
+                okText="确定"
+                cancelText="取消"
+              >
+                <Button type="link" size="small" danger icon={<DeleteOutlined />}>解除关联</Button>
+              </Popconfirm>
+            </Space>
+          </div>
+        ),
+        children: node.children && node.children.length > 0 ? convertToTreeData(node.children) : undefined,
+      }));
+    };
+
+    return (
+      <div>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+          <Typography.Title level={4}>大纲</Typography.Title>
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={showOutlineModal}
+            >
+              关联大纲
+            </Button>
+            <Link to={`/outlines?novelId=${id}`}>
+              <Button type="default" icon={<OrderedListOutlined />}>
+                查看全部
+              </Button>
+            </Link>
+          </Space>
+        </div>
+        
+        {outlines.length > 0 ? (
+          <Tree
+            showLine={{ showLeafIcon: false }}
+            showIcon={false}
+            switcherIcon={<DownOutlined />}
+            treeData={convertToTreeData(outlines)}
+            defaultExpandAll
+            blockNode
+            onSelect={(selectedKeys) => {
+              if (selectedKeys.length > 0) {
+                // 找到选中的大纲
+                const findOutline = (outlines: Outline[], id: string): Outline | undefined => {
+                  for (const outline of outlines) {
+                    if (outline.id === id) {
+                      return outline;
+                    }
+                    if (outline.children && outline.children.length > 0) {
+                      const found = findOutline(outline.children, id);
+                      if (found) return found;
+                    }
+                  }
+                  return undefined;
+                };
+                
+                const selectedOutline = findOutline(outlines, selectedKeys[0].toString());
+                if (selectedOutline) {
+                  // 显示大纲内容
+                  modal.info({
+                    title: selectedOutline.title,
+                    content: (
+                      <div>
+                        <p>{selectedOutline.content || '无内容'}</p>
+                      </div>
+                    ),
+                    width: 600,
+                  });
+                }
+              }
+            }}
+          />
+        ) : (
+          <Empty description="暂无关联大纲" />
+        )}
+
+        <Modal
+          title="关联大纲"
+          open={isOutlineModalVisible}
+          onOk={handleOutlineOk}
+          onCancel={handleOutlineCancel}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Form layout="vertical">
+            <Form.Item label="选择大纲" required>
+              <Select
+                placeholder="请选择要关联的大纲"
+                value={selectedOutlineId}
+                onChange={value => setSelectedOutlineId(value)}
+                style={{ width: '100%' }}
+              >
+                {availableOutlines.map(outline => (
+                  <Select.Option key={outline.id} value={outline.id}>
+                    {outline.title}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+      </div>
+    );
+  };
+  
+  // 渲染关联的时间线事件列表
+  const renderTimelineEvents = () => {
+    return (
+      <div>
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+          <Typography.Title level={4}>时间线</Typography.Title>
+          <Space>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={showTimelineModal}
+            >
+              关联时间线事件
+            </Button>
+            <Link to={`/timeline?novelId=${id}`}>
+              <Button type="default" icon={<HistoryOutlined />}>
+                查看全部
+              </Button>
+            </Link>
+          </Space>
+        </div>
+        
+        {timelineEvents.length > 0 ? (
+          <List
+            dataSource={timelineEvents}
+            renderItem={event => (
+              <List.Item
+                actions={[
+                  <Link to={`/timeline/${event.id}`}>
+                    <Button type="link" icon={<EditOutlined />}>查看</Button>
+                  </Link>,
+                  <Popconfirm
+                    title="确定要解除此时间线事件关联吗？"
+                    onConfirm={() => handleDisassociateTimelineEvent(event.id)}
+                    okText="确定"
+                    cancelText="取消"
+                  >
+                    <Button type="link" danger icon={<DeleteOutlined />}>解除关联</Button>
+                  </Popconfirm>
+                ]}
+              >
+                <List.Item.Meta
+                  title={
+                    <div>
+                      {event.title} 
+                      {event.event_date && <span style={{ fontSize: '0.8em', marginLeft: 8 }}>({event.event_date})</span>}
+                    </div>
+                  }
+                  description={event.description?.substring(0, 100) || '无描述'}
+                />
+              </List.Item>
+            )}
+          />
+        ) : (
+          <Empty description="暂无时间线事件" />
+        )}
+      </div>
+    );
+  };
+
+  // 显示关联大纲模态框
+  const showOutlineModal = () => {
+    loadAvailableOutlines();
+    setIsOutlineModalVisible(true);
+  };
+
+  // 处理关联大纲
+  const handleOutlineOk = async () => {
+    if (!selectedOutlineId || !id) {
+      appMessage.error('请选择要关联的大纲');
+      return;
+    }
+    
+    try {
+      await novelAssociationService.associateOutline(id, selectedOutlineId);
+      appMessage.success('关联大纲成功');
+      loadNovelOutlines(id);
+      setIsOutlineModalVisible(false);
+      setSelectedOutlineId('');
+    } catch (error) {
+      console.error('关联大纲失败:', error);
+      appMessage.error('关联大纲失败');
+    }
+  };
+
+  // 处理取消关联大纲
+  const handleOutlineCancel = () => {
+    setIsOutlineModalVisible(false);
+    setSelectedOutlineId('');
+  };
+
+  // 处理解除大纲关联
+  const handleDisassociateOutline = async (outlineId: string) => {
+    if (!novel || !novel.id) return;
+    
+    try {
+      await novelAssociationService.disassociateOutline(novel.id, outlineId);
+      
+      // 使用App组件的message方法，避免动态主题警告
+      appMessage.success('已解除大纲关联');
+      
+      // 重新加载大纲列表
+      loadNovelOutlines(novel.id);
+    } catch (error) {
+      console.error('解除大纲关联失败:', error);
+      
+      // 使用App组件的message方法，避免动态主题警告
+      appMessage.error('解除大纲关联失败');
+    }
+  };
+
+  // 显示关联时间线事件模态框
+  const showTimelineModal = () => {
+    loadAvailableTimelineEvents();
+    setIsTimelineModalVisible(true);
+  };
+
+  // 处理关联时间线事件
+  const handleTimelineOk = async () => {
+    if (!selectedTimelineEventId || !id) {
+      appMessage.error('请选择要关联的时间线事件');
+      return;
+    }
+    
+    try {
+      await novelAssociationService.associateTimelineEvent(id, selectedTimelineEventId);
+      appMessage.success('关联时间线事件成功');
+      loadNovelTimelineEvents(id);
+      setIsTimelineModalVisible(false);
+      setSelectedTimelineEventId('');
+    } catch (error) {
+      console.error('关联时间线事件失败:', error);
+      appMessage.error('关联时间线事件失败');
+    }
+  };
+
+  // 处理取消关联时间线事件
+  const handleTimelineCancel = () => {
+    setIsTimelineModalVisible(false);
+    setSelectedTimelineEventId('');
+  };
+
+  // 处理解除时间线事件关联
+  const handleDisassociateTimelineEvent = async (timelineEventId: string) => {
+    if (!novel || !novel.id) return;
+    
+    try {
+      await novelAssociationService.disassociateTimelineEvent(novel.id, timelineEventId);
+      
+      // 使用App组件的message方法，避免动态主题警告
+      appMessage.success('已解除时间线事件关联');
+      
+      // 重新加载时间线事件列表
+      loadNovelTimelineEvents(novel.id);
+    } catch (error) {
+      console.error('解除时间线事件关联失败:', error);
+      
+      // 使用App组件的message方法，避免动态主题警告
+      appMessage.error('解除时间线事件关联失败');
+    }
+  };
+
+  // 修改Tab内容，添加关联内容标签页
+  const items = [
+    {
+      key: 'info',
+      label: '基本信息',
+      children: (
+        <div className="novel-info">
+          <Card>
+            <Title level={2}>{novel?.title}</Title>
+            <Descriptions bordered column={2}>
+              <Descriptions.Item label="作者">{novel?.author}</Descriptions.Item>
+              <Descriptions.Item label="类型">{novel?.genre || '未分类'}</Descriptions.Item>
+              <Descriptions.Item label="状态">{getStatusText(novel?.status || '')}</Descriptions.Item>
+              <Descriptions.Item label="字数">{novel?.word_count || 0} 字</Descriptions.Item>
+              <Descriptions.Item label="创建时间">{formatDate(novel?.created_at || '')}</Descriptions.Item>
+              <Descriptions.Item label="更新时间">{formatDate(novel?.updated_at || '')}</Descriptions.Item>
+              <Descriptions.Item label="分类">
+                {category ? (
+                  <Tag color={category.color || '#1890ff'} icon={<FolderOutlined />}>
+                    {category.name}
+                  </Tag>
+                ) : (
+                  <span style={{ color: '#999' }}>未分类</span>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="标签">
+                {renderTags()}
+              </Descriptions.Item>
+            </Descriptions>
+            
+            {novel?.description && (
+              <>
+                <Divider orientation="left">简介</Divider>
+                <Paragraph>{novel?.description}</Paragraph>
+              </>
+            )}
+          </Card>
+        </div>
+      ),
+    },
+    {
+      key: 'chapters',
+      label: '章节管理',
+      children: (
+        <div className="novel-chapters">
+          <Divider orientation="left">章节列表</Divider>
+          
+          <Card>
+            {chapters.length > 0 ? (
+              <DirectoryTree
+                treeData={treeData}
+                defaultExpandAll
+                blockNode
+                draggable
+                onDrop={onTreeDrop}
+              />
+            ) : (
+              <Empty description='暂无章节，点击"新建章节"按钮创建第一个章节' />
+            )}
+          </Card>
+        </div>
+      ),
+    },
+    {
+      key: 'related',
+      label: '关联内容',
+      children: (
+        <div className="novel-related" style={{ height: 'calc(100vh - 250px)', overflowY: 'auto', padding: '0 10px' }}>
+          <Row gutter={[24, 24]}>
+            <Col span={24}>
+              {renderCharacters()}
+            </Col>
+            <Col span={24}>
+              <Divider />
+            </Col>
+            <Col span={24}>
+              {renderLocations()}
+            </Col>
+            <Col span={24}>
+              <Divider />
+            </Col>
+            <Col span={24}>
+              {renderOutlines()}
+            </Col>
+            <Col span={24}>
+              <Divider />
+            </Col>
+            <Col span={24}>
+              {renderTimelineEvents()}
+            </Col>
+          </Row>
+        </div>
+      ),
+    },
+  ];
+
   // 返回加载中状态
   if (loading) {
     return (
@@ -734,307 +1561,292 @@ const NovelDetail: React.FC = () => {
   }
 
   return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <Button 
-          icon={<ArrowLeftOutlined />} 
-          onClick={() => navigate('/novels')}
-          style={{ marginRight: 16 }}
-        >
-          返回列表
-        </Button>
-        
-        <Button 
-          type="primary" 
-          icon={<EditOutlined />} 
-          onClick={showEditModal}
-          style={{ marginRight: 8 }}
-        >
-          编辑小说
-        </Button>
-        
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={showCreateChapterModal}
-          style={{ marginRight: 8 }}
-        >
-          新建章节
-        </Button>
-        
-        <Dropdown
-          menu={{
-            items: [
-              {
-                key: 'txt',
-                label: '导出为TXT文本',
-                onClick: () => handleExportNovel('txt')
-              },
-              {
-                key: 'json',
-                label: '导出为JSON格式',
-                onClick: () => handleExportNovel('json')
-              }
-            ]
-          }}
-        >
-          <Button icon={<ExportOutlined />} loading={exportLoading} style={{ marginRight: 8 }}>
-            导出小说 <DownOutlined />
+    <App>
+      <div className="novel-detail">
+        <div style={{ marginBottom: 16 }}>
+          <Button 
+            icon={<ArrowLeftOutlined />} 
+            onClick={() => navigate('/novels')}
+            style={{ marginRight: 16 }}
+          >
+            返回列表
           </Button>
-        </Dropdown>
+          
+          <Button 
+            type="primary" 
+            icon={<EditOutlined />} 
+            onClick={showEditModal}
+            style={{ marginRight: 8 }}
+          >
+            编辑小说
+          </Button>
+          
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={showCreateChapterModal}
+            style={{ marginRight: 8 }}
+          >
+            新建章节
+          </Button>
+          
+          <Dropdown
+            menu={{
+              items: [
+                {
+                  key: 'txt',
+                  label: '导出为TXT文本',
+                  onClick: () => handleExportNovel('txt')
+                },
+                {
+                  key: 'json',
+                  label: '导出为JSON格式',
+                  onClick: () => handleExportNovel('json')
+                }
+              ]
+            }}
+          >
+            <Button icon={<ExportOutlined />} loading={exportLoading} style={{ marginRight: 8 }}>
+              导出小说 <DownOutlined />
+            </Button>
+          </Dropdown>
 
-        <Button 
-          icon={<FolderOutlined />} 
-          onClick={showCategoryModal}
-          style={{ marginRight: 8 }}
-        >
-          设置分类
-        </Button>
+          <Button 
+            icon={<FolderOutlined />} 
+            onClick={showCategoryModal}
+            style={{ marginRight: 8 }}
+          >
+            设置分类
+          </Button>
 
-        <Button 
-          icon={<TagOutlined />} 
-          onClick={showTagModal}
+          <Button 
+            icon={<TagOutlined />} 
+            onClick={showTagModal}
+          >
+            管理标签
+          </Button>
+        </div>
+        
+        <Tabs defaultActiveKey="info" items={items} />
+
+        {/* 编辑小说对话框 */}
+        <Modal
+          title="编辑小说"
+          open={isEditModalVisible}
+          onOk={handleEditOk}
+          onCancel={handleEditCancel}
+          okText="保存"
+          cancelText="取消"
         >
-          管理标签
-        </Button>
+          <Form
+            form={form}
+            layout="vertical"
+          >
+            <Form.Item
+              name="title"
+              label="标题"
+              rules={[{ required: true, message: '请输入小说标题' }]}
+            >
+              <Input placeholder="请输入小说标题" />
+            </Form.Item>
+            
+            <Form.Item
+              name="author"
+              label="作者"
+              rules={[{ required: true, message: '请输入作者名称' }]}
+            >
+              <Input placeholder="请输入作者名称" />
+            </Form.Item>
+            
+            <Form.Item
+              name="description"
+              label="简介"
+            >
+              <TextArea rows={4} placeholder="请输入小说简介" />
+            </Form.Item>
+            
+            <Form.Item
+              name="genre"
+              label="类型"
+            >
+              <Select placeholder="请选择小说类型">
+                <Option value="玄幻">玄幻</Option>
+                <Option value="奇幻">奇幻</Option>
+                <Option value="武侠">武侠</Option>
+                <Option value="仙侠">仙侠</Option>
+                <Option value="都市">都市</Option>
+                <Option value="现实">现实</Option>
+                <Option value="军事">军事</Option>
+                <Option value="历史">历史</Option>
+                <Option value="游戏">游戏</Option>
+                <Option value="体育">体育</Option>
+                <Option value="科幻">科幻</Option>
+                <Option value="悬疑">悬疑</Option>
+                <Option value="轻小说">轻小说</Option>
+                <Option value="其他">其他</Option>
+              </Select>
+            </Form.Item>
+            
+            <Form.Item
+              name="status"
+              label="状态"
+            >
+              <Select>
+                <Option value="planning">计划中</Option>
+                <Option value="in_progress">进行中</Option>
+                <Option value="completed">已完成</Option>
+                <Option value="abandoned">已放弃</Option>
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 新建章节对话框 */}
+        <Modal
+          title="新建章节"
+          open={isChapterModalVisible}
+          onOk={handleChapterOk}
+          onCancel={handleChapterCancel}
+          okText="创建"
+          cancelText="取消"
+        >
+          <Form
+            form={chapterForm}
+            layout="vertical"
+          >
+            <Form.Item
+              name="title"
+              label="章节标题"
+              rules={[{ required: true, message: '请输入章节标题' }]}
+            >
+              <Input placeholder="请输入章节标题" />
+            </Form.Item>
+            
+            <Form.Item
+              name="parent_id"
+              label="父章节"
+              initialValue="none"
+            >
+              <Select>
+                <Option value="none">无 (顶级章节)</Option>
+                {chapters.map(chapter => (
+                  <Option key={chapter.id} value={chapter.id}>{chapter.title}</Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 分类选择对话框 */}
+        <Modal
+          title="设置小说分类"
+          open={isCategoryModalVisible}
+          onOk={handleCategoryOk}
+          onCancel={handleCategoryCancel}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Form
+            form={categoryForm}
+            layout="vertical"
+          >
+            <Form.Item
+              name="categoryId"
+              label="选择分类"
+            >
+              <Select placeholder="请选择分类" allowClear>
+                {categories.map(cat => (
+                  <Select.Option key={cat.id} value={cat.id}>
+                    {cat.name}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
+
+        {/* 标签管理对话框 */}
+        <Modal
+          title="管理小说标签"
+          open={isTagModalVisible}
+          onCancel={handleTagCancel}
+          footer={[
+            <Button key="close" onClick={handleTagCancel}>
+              关闭
+            </Button>
+          ]}
+          width={700}
+        >
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <Card title="已添加的标签" size="small">
+                {novelTags.length > 0 ? (
+                  <div>
+                    {novelTags.map(tag => (
+                      <Tag 
+                        key={tag.id} 
+                        color={tag.color || '#1890ff'}
+                        style={{ marginBottom: 8 }}
+                        closable
+                        onClose={() => handleRemoveTag(tag.id)}
+                      >
+                        {tag.name}
+                      </Tag>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty description="暂无标签" />
+                )}
+              </Card>
+            </Col>
+            <Col span={12}>
+              <Card title="可用标签" size="small">
+                {tags.filter(tag => !novelTags.some(nt => nt.id === tag.id)).map(tag => (
+                  <Tag 
+                    key={tag.id} 
+                    color={tag.color || '#1890ff'}
+                    style={{ marginBottom: 8, cursor: 'pointer' }}
+                    onClick={() => handleAddTag(tag.id)}
+                  >
+                    <PlusOutlined /> {tag.name}
+                  </Tag>
+                ))}
+                {tags.length === 0 && <Empty description="暂无可用标签" />}
+              </Card>
+            </Col>
+          </Row>
+        </Modal>
+
+        {/* 关联时间线事件对话框 */}
+        <Modal
+          title="关联时间线事件"
+          open={isTimelineModalVisible}
+          onOk={handleTimelineOk}
+          onCancel={handleTimelineCancel}
+          okText="确定"
+          cancelText="取消"
+        >
+          <Form layout="vertical">
+            <Form.Item label="选择时间线事件" required>
+              <Select
+                placeholder="请选择要关联的时间线事件"
+                value={selectedTimelineEventId}
+                onChange={value => setSelectedTimelineEventId(value)}
+                style={{ width: '100%' }}
+              >
+                {availableTimelineEvents.map(event => (
+                  <Select.Option key={event.id} value={event.id}>
+                    {event.title}
+                  </Select.Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Form>
+        </Modal>
       </div>
-      
-      <Card>
-        <Title level={2}>{novel.title}</Title>
-        <Descriptions bordered column={2}>
-          <Descriptions.Item label="作者">{novel.author}</Descriptions.Item>
-          <Descriptions.Item label="类型">{novel.genre || '未分类'}</Descriptions.Item>
-          <Descriptions.Item label="状态">{getStatusText(novel.status)}</Descriptions.Item>
-          <Descriptions.Item label="字数">{novel.word_count || 0} 字</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{formatDate(novel.created_at)}</Descriptions.Item>
-          <Descriptions.Item label="更新时间">{formatDate(novel.updated_at)}</Descriptions.Item>
-          <Descriptions.Item label="分类">
-            {category ? (
-              <Tag color={category.color || '#1890ff'} icon={<FolderOutlined />}>
-                {category.name}
-              </Tag>
-            ) : (
-              <span style={{ color: '#999' }}>未分类</span>
-            )}
-          </Descriptions.Item>
-          <Descriptions.Item label="标签">
-            {renderTags()}
-          </Descriptions.Item>
-        </Descriptions>
-        
-        {novel.description && (
-          <>
-            <Divider orientation="left">简介</Divider>
-            <Paragraph>{novel.description}</Paragraph>
-          </>
-        )}
-      </Card>
-      
-      <Divider orientation="left">章节列表</Divider>
-      
-      <Card>
-        {chapters.length > 0 ? (
-          <DirectoryTree
-            treeData={treeData}
-            defaultExpandAll
-            blockNode
-            draggable
-            onDrop={onTreeDrop}
-          />
-        ) : (
-          <Empty description='暂无章节，点击"新建章节"按钮创建第一个章节' />
-        )}
-      </Card>
-
-      {/* 编辑小说对话框 */}
-      <Modal
-        title="编辑小说"
-        open={isEditModalVisible}
-        onOk={handleEditOk}
-        onCancel={handleEditCancel}
-        okText="保存"
-        cancelText="取消"
-      >
-        <Form
-          form={form}
-          layout="vertical"
-        >
-          <Form.Item
-            name="title"
-            label="标题"
-            rules={[{ required: true, message: '请输入小说标题' }]}
-          >
-            <Input placeholder="请输入小说标题" />
-          </Form.Item>
-          
-          <Form.Item
-            name="author"
-            label="作者"
-            rules={[{ required: true, message: '请输入作者名称' }]}
-          >
-            <Input placeholder="请输入作者名称" />
-          </Form.Item>
-          
-          <Form.Item
-            name="description"
-            label="简介"
-          >
-            <TextArea rows={4} placeholder="请输入小说简介" />
-          </Form.Item>
-          
-          <Form.Item
-            name="genre"
-            label="类型"
-          >
-            <Select placeholder="请选择小说类型">
-              <Option value="玄幻">玄幻</Option>
-              <Option value="奇幻">奇幻</Option>
-              <Option value="武侠">武侠</Option>
-              <Option value="仙侠">仙侠</Option>
-              <Option value="都市">都市</Option>
-              <Option value="现实">现实</Option>
-              <Option value="军事">军事</Option>
-              <Option value="历史">历史</Option>
-              <Option value="游戏">游戏</Option>
-              <Option value="体育">体育</Option>
-              <Option value="科幻">科幻</Option>
-              <Option value="悬疑">悬疑</Option>
-              <Option value="轻小说">轻小说</Option>
-              <Option value="其他">其他</Option>
-            </Select>
-          </Form.Item>
-          
-          <Form.Item
-            name="status"
-            label="状态"
-          >
-            <Select>
-              <Option value="planning">计划中</Option>
-              <Option value="in_progress">进行中</Option>
-              <Option value="completed">已完成</Option>
-              <Option value="abandoned">已放弃</Option>
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 新建章节对话框 */}
-      <Modal
-        title="新建章节"
-        open={isChapterModalVisible}
-        onOk={handleChapterOk}
-        onCancel={handleChapterCancel}
-        okText="创建"
-        cancelText="取消"
-      >
-        <Form
-          form={chapterForm}
-          layout="vertical"
-        >
-          <Form.Item
-            name="title"
-            label="章节标题"
-            rules={[{ required: true, message: '请输入章节标题' }]}
-          >
-            <Input placeholder="请输入章节标题" />
-          </Form.Item>
-          
-          <Form.Item
-            name="parent_id"
-            label="父章节"
-            initialValue="none"
-          >
-            <Select>
-              <Option value="none">无 (顶级章节)</Option>
-              {chapters.map(chapter => (
-                <Option key={chapter.id} value={chapter.id}>{chapter.title}</Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 分类选择对话框 */}
-      <Modal
-        title="设置小说分类"
-        open={isCategoryModalVisible}
-        onOk={handleCategoryOk}
-        onCancel={handleCategoryCancel}
-        okText="确定"
-        cancelText="取消"
-      >
-        <Form
-          form={categoryForm}
-          layout="vertical"
-        >
-          <Form.Item
-            name="categoryId"
-            label="选择分类"
-          >
-            <Select placeholder="请选择分类" allowClear>
-              {categories.map(cat => (
-                <Select.Option key={cat.id} value={cat.id}>
-                  {cat.name}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-        </Form>
-      </Modal>
-
-      {/* 标签管理对话框 */}
-      <Modal
-        title="管理小说标签"
-        open={isTagModalVisible}
-        onCancel={handleTagCancel}
-        footer={[
-          <Button key="close" onClick={handleTagCancel}>
-            关闭
-          </Button>
-        ]}
-        width={700}
-      >
-        <Row gutter={[16, 16]}>
-          <Col span={12}>
-            <Card title="已添加的标签" size="small">
-              {novelTags.length > 0 ? (
-                <div>
-                  {novelTags.map(tag => (
-                    <Tag 
-                      key={tag.id} 
-                      color={tag.color || '#1890ff'}
-                      style={{ marginBottom: 8 }}
-                      closable
-                      onClose={() => handleRemoveTag(tag.id)}
-                    >
-                      {tag.name}
-                    </Tag>
-                  ))}
-                </div>
-              ) : (
-                <Empty description="暂无标签" />
-              )}
-            </Card>
-          </Col>
-          <Col span={12}>
-            <Card title="可用标签" size="small">
-              {tags.filter(tag => !novelTags.some(nt => nt.id === tag.id)).map(tag => (
-                <Tag 
-                  key={tag.id} 
-                  color={tag.color || '#1890ff'}
-                  style={{ marginBottom: 8, cursor: 'pointer' }}
-                  onClick={() => handleAddTag(tag.id)}
-                >
-                  <PlusOutlined /> {tag.name}
-                </Tag>
-              ))}
-              {tags.length === 0 && <Empty description="暂无可用标签" />}
-            </Card>
-          </Col>
-        </Row>
-      </Modal>
-    </div>
+    </App>
   );
 };
 
+// 删除不需要的组件
 export default NovelDetail; 
