@@ -11,7 +11,9 @@ import {
   message,
   Divider,
   Tooltip,
-  Tabs
+  Tabs,
+  Table,
+  Modal
 } from 'antd';
 import { 
   ApiOutlined, 
@@ -21,14 +23,17 @@ import {
   LinkOutlined,
   GlobalOutlined,
   AppstoreOutlined,
-  SlidersOutlined
+  SlidersOutlined,
+  PlusOutlined,
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
-import { AIProvider } from '../types';
-import type { AISettings } from '../types';
+import { AIProviderType, AIProvider } from '../types';
 import { AISettingsService } from '../services/ai-settings-service';
 import { aiServiceManager } from '../services';
 import AIModelManager from './AIModelManager';
 import AIScenarioSettings from './AIScenarioSettings';
+import { v4 as uuidv4 } from 'uuid';
 
 const { Option } = Select;
 const { TabPane } = Tabs;
@@ -40,28 +45,36 @@ const AISettings: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [settings, setSettings] = useState<AISettings | null>(null);
-  const [allConfigs, setAllConfigs] = useState<AISettings[]>([]);
-  const [currentConfigId, setCurrentConfigId] = useState<string | null>(null);
+  const [settings, setSettings] = useState<any>(null);
+  const [providers, setProviders] = useState<AIProvider[]>([]);
+  const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [editingProvider, setEditingProvider] = useState<AIProvider | null>(null);
+  
   const aiSettingsService = AISettingsService.getInstance();
   
-  // 获取当前选择的提供商
-  const provider = Form.useWatch('provider', form);
+  // 获取当前选择的提供商类型
+  const providerType = Form.useWatch('type', form);
 
   // 加载设置
   useEffect(() => {
     const loadSettings = async () => {
       const settings = await aiSettingsService.loadSettings();
-      const allConfigs = await aiSettingsService.loadAllConfigs();
       
       setSettings(settings);
-      setAllConfigs(allConfigs);
-      setCurrentConfigId(settings.id || null);
+      setProviders(settings.providers || []);
+      setActiveProviderId(settings.activeProviderId || null);
       
-      form.setFieldsValue({
-        ...settings,
-        apiKey: settings.apiKey ? '********' : '', // 隐藏API密钥
-      });
+      // 如果有活动提供商，加载其数据
+      if (settings.activeProviderId) {
+        const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+        if (activeProvider) {
+          form.setFieldsValue({
+            ...activeProvider,
+            apiKey: activeProvider.apiKey ? '********' : '', // 隐藏API密钥
+          });
+        }
+      }
     };
     
     loadSettings();
@@ -72,24 +85,41 @@ const AISettings: React.FC = () => {
     setLoading(true);
     
     try {
-      // 如果API密钥是星号，则保留原来的密钥
-      if (values.apiKey === '********' && settings?.apiKey) {
-        values.apiKey = settings.apiKey;
+      if (!activeProviderId) {
+        message.error('请先选择或创建一个供应商');
+        setLoading(false);
+        return;
       }
       
-      const newSettings: AISettings = {
+      // 如果API密钥是星号，则保留原来的密钥
+      if (values.apiKey === '********') {
+        const currentProvider = providers.find(p => p.id === activeProviderId);
+        if (currentProvider && currentProvider.apiKey) {
+          values.apiKey = currentProvider.apiKey;
+        }
+      }
+      
+      // 更新供应商信息
+      const updatedProvider: AIProvider = {
         ...values,
-        id: settings?.id || Date.now().toString(),
-        models: settings?.models || []
+        id: activeProviderId
       };
       
-      await aiSettingsService.saveSettings(newSettings);
+      // 更新providers列表
+      const updatedProviders = providers.map(p => 
+        p.id === activeProviderId ? updatedProvider : p
+      );
       
-      // 刷新配置列表
-      const allConfigs = await aiSettingsService.loadAllConfigs();
-      setAllConfigs(allConfigs);
+      // 更新settings
+      const updatedSettings = {
+        ...settings,
+        providers: updatedProviders,
+        activeProviderId
+      };
       
-      setSettings(newSettings);
+      await aiSettingsService.saveSettings(updatedSettings);
+      setProviders(updatedProviders);
+      setSettings(updatedSettings);
       
       message.success('设置已保存');
     } catch (error) {
@@ -108,14 +138,24 @@ const AISettings: React.FC = () => {
       const values = await form.validateFields();
       
       // 如果API密钥是星号，则保留原来的密钥
-      if (values.apiKey === '********' && settings?.apiKey) {
-        values.apiKey = settings.apiKey;
+      if (values.apiKey === '********' && activeProviderId) {
+        const currentProvider = providers.find(p => p.id === activeProviderId);
+        if (currentProvider && currentProvider.apiKey) {
+          values.apiKey = currentProvider.apiKey;
+        }
       }
       
-      const testSettings: AISettings = {
+      // 创建临时供应商对象
+      const testProvider: AIProvider = {
         ...values,
-        id: settings?.id || Date.now().toString(),
-        models: settings?.models || []
+        id: activeProviderId || 'temp-provider'
+      };
+      
+      // 创建临时设置对象
+      const testSettings = {
+        ...settings,
+        activeProviderId: testProvider.id,
+        providers: [testProvider]
       };
       
       const success = await aiServiceManager.initialize(testSettings);
@@ -133,71 +173,187 @@ const AISettings: React.FC = () => {
     }
   };
   
-  // 切换配置
-  const handleConfigChange = async (configId: string) => {
-    setCurrentConfigId(configId);
-    
+  // 切换供应商
+  const handleProviderChange = async (providerId: string) => {
     try {
-      const config = await aiSettingsService.loadConfigById(configId);
-      if (config) {
-        setSettings(config);
+      // 保存当前表单数据
+      if (activeProviderId) {
+        try {
+          const values = await form.validateFields();
+          
+          // 如果API密钥是星号，则保留原来的密钥
+          if (values.apiKey === '********') {
+            const currentProvider = providers.find(p => p.id === activeProviderId);
+            if (currentProvider && currentProvider.apiKey) {
+              values.apiKey = currentProvider.apiKey;
+            }
+          }
+          
+          // 更新供应商信息
+          const updatedProvider: AIProvider = {
+            ...values,
+            id: activeProviderId
+          };
+          
+          // 更新providers列表
+          const updatedProviders = providers.map(p => 
+            p.id === activeProviderId ? updatedProvider : p
+          );
+          
+          setProviders(updatedProviders);
+          
+          // 更新settings
+          const updatedSettings = {
+            ...settings,
+            providers: updatedProviders
+          };
+          
+          setSettings(updatedSettings);
+        } catch (error) {
+          console.error('保存当前表单数据失败:', error);
+        }
+      }
+      
+      // 设置新的活动供应商
+      setActiveProviderId(providerId);
+      
+      // 更新settings中的activeProviderId
+      const updatedSettings = {
+        ...settings,
+        activeProviderId: providerId
+      };
+      
+      await aiSettingsService.saveSettings(updatedSettings);
+      setSettings(updatedSettings);
+      
+      // 加载新供应商的数据
+      const provider = providers.find(p => p.id === providerId);
+      if (provider) {
         form.setFieldsValue({
-          ...config,
-          apiKey: config.apiKey ? '********' : '',
+          ...provider,
+          apiKey: provider.apiKey ? '********' : '', // 隐藏API密钥
         });
       }
     } catch (error) {
-      console.error('加载配置失败:', error);
-      message.error('加载配置失败');
+      console.error('切换供应商失败:', error);
+      message.error('切换供应商失败');
     }
   };
   
-  // 创建新配置
-  const handleCreateConfig = async () => {
-    const newConfig: AISettings = {
-      id: Date.now().toString(),
-      name: `配置${allConfigs.length + 1}`,
-      provider: AIProvider.OPENAI,
-      models: [],
-      defaultModel: 'gpt-3.5-turbo',
-      temperature: 0.7,
-      maxTokens: 1000,
-    };
-    
+  // 打开创建供应商对话框
+  const showCreateProviderModal = () => {
+    setEditingProvider(null);
+    form.resetFields();
+    setModalVisible(true);
+  };
+  
+  // 创建新供应商
+  const handleCreateProvider = async () => {
     try {
-      await aiSettingsService.saveConfig(newConfig);
-      const allConfigs = await aiSettingsService.loadAllConfigs();
-      setAllConfigs(allConfigs);
+      const values = await form.validateFields();
       
-      // 切换到新配置
-      handleConfigChange(newConfig.id!);
+      const newProvider: AIProvider = {
+        ...values,
+        id: uuidv4(),
+        defaultModel: values.defaultModel || 'gpt-3.5-turbo',
+        temperature: values.temperature || 0.7,
+        maxTokens: values.maxTokens || 1000
+      };
       
-      message.success('创建配置成功');
+      // 更新providers列表
+      const updatedProviders = [...providers, newProvider];
+      
+      // 更新settings
+      const updatedSettings = {
+        ...settings,
+        providers: updatedProviders,
+        activeProviderId: newProvider.id
+      };
+      
+      await aiSettingsService.saveSettings(updatedSettings);
+      
+      setProviders(updatedProviders);
+      setSettings(updatedSettings);
+      setActiveProviderId(newProvider.id);
+      setModalVisible(false);
+      
+      // 重新加载表单数据
+      form.setFieldsValue({
+        ...newProvider,
+        apiKey: newProvider.apiKey ? '********' : '', // 隐藏API密钥
+      });
+      
+      message.success('创建供应商成功');
     } catch (error) {
-      console.error('创建配置失败:', error);
-      message.error('创建配置失败');
+      console.error('创建供应商失败:', error);
+      message.error('创建供应商失败');
     }
   };
   
-  // 根据提供商显示不同的表单项
-  const renderProviderSpecificFields = () => {
-    const provider = form.getFieldValue('provider');
+  // 删除供应商
+  const handleDeleteProvider = async (providerId: string) => {
+    try {
+      Modal.confirm({
+        title: '确认删除',
+        content: '确定要删除此供应商吗？相关的模型和配置也将被删除。',
+        okText: '删除',
+        okType: 'danger',
+        cancelText: '取消',
+        onOk: async () => {
+          // 更新providers列表
+          const updatedProviders = providers.filter(p => p.id !== providerId);
+          
+          // 如果删除的是当前活动供应商，切换到第一个供应商
+          let newActiveProviderId = activeProviderId;
+          if (providerId === activeProviderId) {
+            newActiveProviderId = updatedProviders.length > 0 ? updatedProviders[0].id : null;
+          }
+          
+          // 更新settings
+          const updatedSettings = {
+            ...settings,
+            providers: updatedProviders,
+            activeProviderId: newActiveProviderId,
+            // 过滤掉该供应商的模型
+            models: settings.models.filter((m: any) => m.providerId !== providerId)
+          };
+          
+          await aiSettingsService.saveSettings(updatedSettings);
+          
+          setProviders(updatedProviders);
+          setSettings(updatedSettings);
+          setActiveProviderId(newActiveProviderId);
+          
+          // 如果有新的活动供应商，加载其数据
+          if (newActiveProviderId) {
+            const provider = updatedProviders.find(p => p.id === newActiveProviderId);
+            if (provider) {
+              form.setFieldsValue({
+                ...provider,
+                apiKey: provider.apiKey ? '********' : '', // 隐藏API密钥
+              });
+            }
+          } else {
+            form.resetFields();
+          }
+          
+          message.success('删除供应商成功');
+        }
+      });
+    } catch (error) {
+      console.error('删除供应商失败:', error);
+      message.error('删除供应商失败');
+    }
+  };
+  
+  // 根据提供商类型显示不同的表单项
+  const renderProviderTypeSpecificFields = () => {
+    const type = form.getFieldValue('type');
     
-    switch (provider) {
-      case AIProvider.OPENAI:
+    switch (type) {
+      case AIProviderType.OPENAI:
         return (
           <>
-            <Form.Item
-              label="配置名称"
-              name="name"
-              rules={[{ required: true, message: '请输入配置名称' }]}
-              tooltip="用于区分不同的API配置"
-            >
-              <Input 
-                placeholder="如：OpenAI官方API" 
-              />
-            </Form.Item>
-            
             <Form.Item
               label="API密钥"
               name="apiKey"
@@ -222,20 +378,9 @@ const AISettings: React.FC = () => {
           </>
         );
         
-      case AIProvider.DEEPSEEK:
+      case AIProviderType.DEEPSEEK:
         return (
           <>
-            <Form.Item
-              label="配置名称"
-              name="name"
-              rules={[{ required: true, message: '请输入配置名称' }]}
-              tooltip="用于区分不同的API配置"
-            >
-              <Input 
-                placeholder="如：DeepSeek官方API" 
-              />
-            </Form.Item>
-          
             <Form.Item
               label="API密钥"
               name="apiKey"
@@ -260,20 +405,9 @@ const AISettings: React.FC = () => {
           </>
         );
         
-      case AIProvider.OPENAI_COMPATIBLE:
+      case AIProviderType.OPENAI_COMPATIBLE:
         return (
           <>
-            <Form.Item
-              label="配置名称"
-              name="name"
-              rules={[{ required: true, message: '请输入配置名称' }]}
-              tooltip="用于区分不同的API配置，如Azure OpenAI、Anthropic、自行部署的Ollama等"
-            >
-              <Input 
-                placeholder="如：Azure OpenAI、本地API等" 
-              />
-            </Form.Item>
-            
             <Form.Item
               label="API基础URL"
               name="baseUrl"
@@ -299,20 +433,9 @@ const AISettings: React.FC = () => {
           </>
         );
         
-      case AIProvider.OLLAMA:
+      case AIProviderType.OLLAMA:
         return (
           <>
-            <Form.Item
-              label="配置名称"
-              name="name"
-              rules={[{ required: true, message: '请输入配置名称' }]}
-              tooltip="用于区分不同的API配置"
-            >
-              <Input 
-                placeholder="如：本地Ollama服务" 
-              />
-            </Form.Item>
-            
             <Form.Item
               label="服务器URL"
               name="localServerUrl"
@@ -327,20 +450,9 @@ const AISettings: React.FC = () => {
           </>
         );
         
-      case AIProvider.LMSTUDIO:
+      case AIProviderType.LMSTUDIO:
         return (
           <>
-            <Form.Item
-              label="配置名称"
-              name="name"
-              rules={[{ required: true, message: '请输入配置名称' }]}
-              tooltip="用于区分不同的API配置"
-            >
-              <Input 
-                placeholder="如：本地LMStudio服务" 
-              />
-            </Form.Item>
-            
             <Form.Item
               label="服务器URL"
               name="localServerUrl"
@@ -360,34 +472,77 @@ const AISettings: React.FC = () => {
     }
   };
   
-  // 渲染配置选择器
-  const renderConfigSelector = () => {
-    if (!allConfigs || allConfigs.length === 0) {
-      return null;
-    }
+  // 渲染供应商列表
+  const renderProviderList = () => {
+    const columns = [
+      {
+        title: '名称',
+        dataIndex: 'name',
+        key: 'name',
+      },
+      {
+        title: '类型',
+        dataIndex: 'type',
+        key: 'type',
+        render: (type: AIProviderType) => {
+          const typeLabels: Record<AIProviderType, string> = {
+            [AIProviderType.OPENAI]: 'OpenAI',
+            [AIProviderType.DEEPSEEK]: 'DeepSeek',
+            [AIProviderType.OLLAMA]: 'Ollama',
+            [AIProviderType.LMSTUDIO]: 'LM Studio',
+            [AIProviderType.OPENAI_COMPATIBLE]: 'OpenAI兼容'
+          };
+          
+          return typeLabels[type] || type;
+        }
+      },
+      {
+        title: '操作',
+        key: 'action',
+        render: (_: any, record: AIProvider) => (
+          <Space>
+            <Button
+              type={record.id === activeProviderId ? 'primary' : 'default'}
+              size="small"
+              onClick={() => handleProviderChange(record.id)}
+            >
+              {record.id === activeProviderId ? '当前使用' : '使用'}
+            </Button>
+            <Button
+              type="text"
+              danger
+              icon={<DeleteOutlined />}
+              size="small"
+              onClick={() => handleDeleteProvider(record.id)}
+              disabled={providers.length <= 1} // 禁止删除最后一个供应商
+            >
+              删除
+            </Button>
+          </Space>
+        ),
+      },
+    ];
     
     return (
-      <Form.Item label="选择配置">
-        <Select 
-          value={currentConfigId || undefined}
-          onChange={handleConfigChange}
-          style={{ width: '100%' }}
-          placeholder="选择配置"
-        >
-          {allConfigs.map(config => (
-            <Option key={config.id} value={config.id || ''}>
-              {config.name || `${config.provider}配置`}
-            </Option>
-          ))}
-        </Select>
-        <Button 
-          type="link" 
-          onClick={handleCreateConfig}
-          style={{ paddingLeft: 0 }}
-        >
-          + 创建新配置
-        </Button>
-      </Form.Item>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+          <h3>供应商列表</h3>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={showCreateProviderModal}
+          >
+            添加供应商
+          </Button>
+        </div>
+        <Table
+          dataSource={providers}
+          columns={columns}
+          rowKey="id"
+          pagination={false}
+          size="small"
+        />
+      </div>
     );
   };
   
@@ -405,100 +560,126 @@ const AISettings: React.FC = () => {
         >
           <div style={{ height: 'calc(100vh - 180px)', overflowY: 'auto', padding: '8px' }}>
             <Card bordered={false} style={{ marginBottom: '60px' }}>
-              {renderConfigSelector()}
+              {renderProviderList()}
               
-              <Form
-                form={form}
-                layout="vertical"
-                onFinish={handleSave}
-                initialValues={{
-                  provider: AIProvider.OPENAI,
-                  temperature: 0.7,
-                  maxTokens: 1000,
-                  name: '默认配置'
-                }}
-                preserve={true}
-              >
-                <Form.Item
-                  label="AI提供商"
-                  name="provider"
-                  rules={[{ required: true, message: '请选择AI提供商' }]}
+              {activeProviderId && (
+                <Form
+                  form={form}
+                  layout="vertical"
+                  onFinish={handleSave}
+                  initialValues={{
+                    type: AIProviderType.OPENAI,
+                    temperature: 0.7,
+                    maxTokens: 1000,
+                    name: '新供应商'
+                  }}
+                  preserve={true}
                 >
-                  <Select
-                    placeholder="选择AI提供商"
-                    onChange={() => form.resetFields(['apiKey', 'baseUrl', 'localServerUrl'])}
+                  <Form.Item
+                    label="供应商名称"
+                    name="name"
+                    rules={[{ required: true, message: '请输入供应商名称' }]}
+                    tooltip="用于区分不同的API配置"
                   >
-                    <Option value={AIProvider.OPENAI}>OpenAI</Option>
-                    <Option value={AIProvider.DEEPSEEK}>DeepSeek</Option>
-                    <Option value={AIProvider.OPENAI_COMPATIBLE}>OpenAI兼容API</Option>
-                    <Option value={AIProvider.OLLAMA}>Ollama (本地)</Option>
-                    <Option value={AIProvider.LMSTUDIO}>LM Studio (本地)</Option>
-                  </Select>
-                </Form.Item>
-                
-                {renderProviderSpecificFields()}
-                
-                <Form.Item
-                  label="默认模型"
-                  name="defaultModel"
-                  rules={[{ required: true, message: '请选择默认模型' }]}
-                >
-                  <Input placeholder="输入默认模型名称" />
-                </Form.Item>
-                
-                <Divider orientation="left">生成参数</Divider>
-                
-                <Form.Item
-                  label={
-                    <Tooltip title="较高的值会使输出更加随机，较低的值会使其更加集中和确定">
-                      温度 (Temperature)
-                    </Tooltip>
-                  }
-                  name="temperature"
-                >
-                  <Slider
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    marks={{
-                      0: '精确',
-                      0.5: '平衡',
-                      1: '创意'
-                    }}
-                  />
-                </Form.Item>
-                
-                <Form.Item
-                  label={
-                    <Tooltip title="生成文本的最大长度">
-                      最大Token数
-                    </Tooltip>
-                  }
-                  name="maxTokens"
-                >
-                  <InputNumber min={1} max={100000} style={{ width: '100%' }} />
-                </Form.Item>
-                
-                <Form.Item>
-                  <Space>
-                    <Button 
-                      type="primary" 
-                      htmlType="submit" 
-                      icon={<SaveOutlined />} 
-                      loading={loading}
+                    <Input 
+                      placeholder="如：OpenAI官方API、Azure OpenAI等" 
+                    />
+                  </Form.Item>
+                  
+                  <Form.Item
+                    label="供应商类型"
+                    name="type"
+                    rules={[{ required: true, message: '请选择供应商类型' }]}
+                  >
+                    <Select
+                      placeholder="选择供应商类型"
+                      onChange={() => form.resetFields(['apiKey', 'baseUrl', 'localServerUrl'])}
                     >
-                      保存设置
-                    </Button>
-                    <Button 
-                      icon={<ApiOutlined />} 
-                      onClick={handleTestConnection} 
-                      loading={testing}
-                    >
-                      测试连接
-                    </Button>
-                  </Space>
-                </Form.Item>
-              </Form>
+                      <Option value={AIProviderType.OPENAI}>OpenAI</Option>
+                      <Option value={AIProviderType.DEEPSEEK}>DeepSeek</Option>
+                      <Option value={AIProviderType.OPENAI_COMPATIBLE}>OpenAI兼容API</Option>
+                      <Option value={AIProviderType.OLLAMA}>Ollama (本地)</Option>
+                      <Option value={AIProviderType.LMSTUDIO}>LM Studio (本地)</Option>
+                    </Select>
+                  </Form.Item>
+                  
+                  {renderProviderTypeSpecificFields()}
+                  
+                  <Form.Item
+                    label="默认模型"
+                    name="defaultModel"
+                    rules={[{ required: true, message: '请输入默认模型名称' }]}
+                  >
+                    <Input placeholder="输入默认模型名称，如gpt-3.5-turbo" />
+                  </Form.Item>
+                  
+                  <Divider orientation="left">生成参数</Divider>
+                  
+                  <Form.Item
+                    label={
+                      <Tooltip title="较高的值会使输出更加随机，较低的值会使其更加集中和确定">
+                        温度 (Temperature)
+                      </Tooltip>
+                    }
+                    name="temperature"
+                  >
+                    <Slider
+                      min={0}
+                      max={1}
+                      step={0.01}
+                      marks={{
+                        0: '精确',
+                        0.5: '平衡',
+                        1: '创意'
+                      }}
+                    />
+                  </Form.Item>
+                  
+                  <Form.Item
+                    label={
+                      <Tooltip title="生成文本的最大长度">
+                        最大Token数
+                      </Tooltip>
+                    }
+                    name="maxTokens"
+                  >
+                    <InputNumber min={1} max={100000} style={{ width: '100%' }} />
+                  </Form.Item>
+                  
+                  <Form.Item>
+                    <Space>
+                      <Button 
+                        type="primary" 
+                        htmlType="submit" 
+                        icon={<SaveOutlined />} 
+                        loading={loading}
+                      >
+                        保存设置
+                      </Button>
+                      <Button 
+                        icon={<ApiOutlined />} 
+                        onClick={handleTestConnection} 
+                        loading={testing}
+                      >
+                        测试连接
+                      </Button>
+                    </Space>
+                  </Form.Item>
+                </Form>
+              )}
+              
+              {!activeProviderId && (
+                <div style={{ textAlign: 'center', padding: '20px' }}>
+                  <p>请先创建一个供应商</p>
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    onClick={showCreateProviderModal}
+                  >
+                    添加供应商
+                  </Button>
+                </div>
+              )}
             </Card>
           </div>
         </TabPane>
@@ -525,6 +706,57 @@ const AISettings: React.FC = () => {
           </div>
         </TabPane>
       </Tabs>
+      
+      {/* 创建供应商对话框 */}
+      <Modal
+        title="添加供应商"
+        open={modalVisible}
+        onOk={handleCreateProvider}
+        onCancel={() => setModalVisible(false)}
+        okText="添加"
+        cancelText="取消"
+      >
+        <Form
+          form={form}
+          layout="vertical"
+        >
+          <Form.Item
+            label="供应商名称"
+            name="name"
+            rules={[{ required: true, message: '请输入供应商名称' }]}
+          >
+            <Input placeholder="如：OpenAI官方API、Azure OpenAI等" />
+          </Form.Item>
+          
+          <Form.Item
+            label="供应商类型"
+            name="type"
+            rules={[{ required: true, message: '请选择供应商类型' }]}
+            initialValue={AIProviderType.OPENAI}
+          >
+            <Select
+              placeholder="选择供应商类型"
+              onChange={() => form.resetFields(['apiKey', 'baseUrl', 'localServerUrl'])}
+            >
+              <Option value={AIProviderType.OPENAI}>OpenAI</Option>
+              <Option value={AIProviderType.DEEPSEEK}>DeepSeek</Option>
+              <Option value={AIProviderType.OPENAI_COMPATIBLE}>OpenAI兼容API</Option>
+              <Option value={AIProviderType.OLLAMA}>Ollama (本地)</Option>
+              <Option value={AIProviderType.LMSTUDIO}>LM Studio (本地)</Option>
+            </Select>
+          </Form.Item>
+          
+          {renderProviderTypeSpecificFields()}
+          
+          <Form.Item
+            label="默认模型"
+            name="defaultModel"
+            initialValue="gpt-3.5-turbo"
+          >
+            <Input placeholder="输入默认模型名称，如gpt-3.5-turbo" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </div>
   );
 };

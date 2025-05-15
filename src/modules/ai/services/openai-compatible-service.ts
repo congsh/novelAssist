@@ -5,7 +5,7 @@ import {
 } from './ai-base-service';
 import { 
   AIModel, 
-  AIProvider, 
+  AIProviderType, 
   AISettings, 
   ChatCompletionRequest, 
   ChatCompletionResponse, 
@@ -28,16 +28,23 @@ export class OpenAICompatibleService implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     try {
-      if (settings.provider !== AIProvider.OPENAI_COMPATIBLE) {
-        throw new Error('无效的AI提供商设置');
+      // 获取当前活动的提供商
+      const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+      
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
-      if (!settings.baseUrl) {
+      if (activeProvider.type !== AIProviderType.OPENAI_COMPATIBLE) {
+        throw new Error('当前提供商不是OpenAI Compatible类型');
+      }
+      
+      if (!activeProvider.baseUrl) {
         throw new Error('缺少API基础URL');
       }
       
       // 规范化基础URL
-      let baseURL = settings.baseUrl;
+      let baseURL = activeProvider.baseUrl;
       
       // 确保URL以https://或http://开头
       if (!baseURL.startsWith('http://') && !baseURL.startsWith('https://')) {
@@ -52,15 +59,12 @@ export class OpenAICompatibleService implements AIBaseService {
       console.log('使用API基础URL:', baseURL);
       
       this.client = new OpenAI({
-        apiKey: settings.apiKey || 'sk-no-key-required', // 某些兼容API可能不需要密钥
+        apiKey: activeProvider.apiKey || 'sk-no-key-required', // 某些兼容API可能不需要密钥
         baseURL: baseURL,
         dangerouslyAllowBrowser: true, // 允许在浏览器环境中使用
       });
       
-      this.settings = {
-        ...settings,
-        baseUrl: baseURL
-      };
+      this.settings = settings;
       
       // 测试连接
       const isConnected = await this.testConnection();
@@ -74,22 +78,65 @@ export class OpenAICompatibleService implements AIBaseService {
   /**
    * 获取可用的模型列表
    */
-  async getAvailableModels(): Promise<AIModel[]> {
-    // 直接使用默认模型，避免请求模型列表
-    if (this.settings?.defaultModel) {
-      return [
-        {
-          id: this.settings.defaultModel,
-          name: this.settings.defaultModel,
-          provider: AIProvider.OPENAI_COMPATIBLE,
-          description: '默认模型',
-          contextWindow: 4096, // 默认上下文窗口大小
+  async getAvailableModels(): Promise<AIModel[]> {  
+    try {
+      if (!this.settings) {
+        return [];
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
+      }
+      
+      // 首先尝试使用用户已经在settings中配置的models
+      if (this.settings.models?.length) {
+        const compatibleModels = this.settings.models.filter(
+          model => model.providerId === this.settings.activeProviderId
+        );
+        
+        if (compatibleModels.length > 0) {
+          return compatibleModels;
         }
-      ];
+      }
+      
+      // 如果没有配置的模型，但有默认模型设置，使用默认模型
+      if (activeProvider.defaultModel) {
+        return [
+          {
+            id: activeProvider.defaultModel,
+            name: activeProvider.defaultModel,
+            providerId: activeProvider.id,
+            description: '默认模型',
+            contextWindow: 4096, // 默认上下文窗口大小
+          }
+        ];
+      }
+      
+      // 尝试从API获取模型列表
+      if (this.client) {
+        try {
+          const models = await this.client.models.list();
+          return models.data.map(model => ({
+            id: model.id,
+            name: model.id,
+            providerId: activeProvider.id,
+            description: model.owned_by || '兼容模型',
+            contextWindow: 4096, // 默认值
+          }));
+        } catch (error) {
+          console.warn('获取模型列表失败，使用默认值:', error);
+          // 失败就使用默认值，不影响使用
+        }
+      }
+      
+      // 如果都失败了，返回空列表
+      return [];
+    } catch (error) {
+      console.error('获取模型列表出错:', error);
+      return [];
     }
-    
-    // 如果没有设置默认模型，返回空列表
-    return [];
   }
   
   /**
@@ -241,64 +288,45 @@ export class OpenAICompatibleService implements AIBaseService {
   }
   
   /**
-   * 测试API连接
+   * 测试连接
    */
   async testConnection(): Promise<boolean> {
+    if (!this.client || !this.settings) {
+      return false;
+    }
+    
     try {
-      if (!this.client || !this.settings?.baseUrl) {
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
+      }
+      
+      // 尝试获取models列表来测试连接
+      await this.client.models.list();
+      return true;
+    } catch (error) {
+      console.warn('测试连接失败，尝试模拟检测:', error);
+      
+      // 某些API不支持获取models，尝试发送简单请求
+      try {
+        const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+        if (!activeProvider) {
+          return false;
+        }
+
+        // 使用默认模型发送测试请求
+        await this.client.chat.completions.create({
+          model: activeProvider.defaultModel,
+          messages: [{ role: 'user', content: 'Hello' }],
+          temperature: 0.7,
+          max_tokens: 5,
+        });
+        return true;
+      } catch (error) {
+        console.error('测试连接彻底失败:', error);
         return false;
       }
-      
-      // 尝试使用简单的聊天请求测试连接
-      try {
-        if (this.settings?.defaultModel) {
-          const response = await this.client?.chat.completions.create({
-            model: this.settings.defaultModel,
-            messages: [{ role: 'user', content: 'Hello!' }],
-            max_tokens: 5,
-          });
-          
-          return !!response;
-        }
-      } catch (chatError) {
-        console.error('OpenAI Compatible聊天请求测试失败:', chatError);
-      }
-      
-      // 如果OpenAI客户端请求失败，尝试直接使用fetch进行测试
-      try {
-        const baseUrl = this.settings.baseUrl;
-        const testUrl = `${baseUrl}/models`;
-        
-        console.log('尝试直接测试API连接:', testUrl);
-        
-        const response = await fetch(testUrl, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(this.settings.apiKey ? { 'Authorization': `Bearer ${this.settings.apiKey}` } : {})
-          }
-        });
-        
-        if (response.ok) {
-          console.log('API连接测试成功');
-          return true;
-        } else {
-          console.log('API连接测试失败，状态码:', response.status);
-        }
-      } catch (fetchError) {
-        console.error('直接API连接测试失败:', fetchError);
-      }
-      
-      // 如果配置看起来有效，则假设API可用
-      if (this.settings?.baseUrl) {
-        console.log('无法验证API可用性，但配置看起来有效，假设API可用');
-        return true;
-      }
-      
-      return false;
-    } catch (error) {
-      console.error('OpenAI Compatible连接测试失败:', error);
-      return false;
     }
   }
 } 

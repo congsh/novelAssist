@@ -1,7 +1,7 @@
 /**
- * AI提供商类型
+ * AI提供商类型枚举
  */
-export enum AIProvider {
+export enum AIProviderType {
   OPENAI = 'openai',
   DEEPSEEK = 'deepseek',
   OLLAMA = 'ollama',
@@ -25,7 +25,7 @@ export enum AIScenario {
 export interface AIModel {
   id: string;
   name: string;
-  provider: AIProvider;
+  providerId: string;  // 关联到提供商ID
   description?: string;
   maxTokens?: number;
   contextWindow?: number;
@@ -34,21 +34,29 @@ export interface AIModel {
 }
 
 /**
- * AI设置接口
+ * AI提供商实例
+ */
+export interface AIProvider {
+  id: string;           // 供应商唯一ID
+  name: string;         // 显示名称，可自定义
+  type: AIProviderType; // 提供商类型
+  apiKey?: string;      // API密钥
+  baseUrl?: string;     // 基础URL (OpenAI, DeepSeek, OpenAI兼容)
+  localServerUrl?: string; // 本地服务URL (Ollama, LMStudio)
+  defaultModel: string; // 默认模型ID
+  temperature: number;  // 默认温度
+  maxTokens: number;    // 默认最大令牌数
+  proxyUrl?: string;    // 代理URL
+}
+
+/**
+ * AI全局设置
  */
 export interface AISettings {
-  id?: string;           // 配置ID，用于多配置管理
-  name?: string;         // 配置名称，用于显示
-  provider: AIProvider;
-  apiKey?: string;
-  baseUrl?: string;
-  models: AIModel[];
-  defaultModel: string;
-  temperature: number;
-  maxTokens: number;
-  proxyUrl?: string;
-  localServerUrl?: string;
-  scenarioConfigs?: Record<AIScenario, AIScenarioConfig>;  // 不同场景的配置
+  activeProviderId: string;  // 当前活动的供应商ID
+  providers: AIProvider[];   // 所有供应商实例
+  models: AIModel[];         // 所有模型
+  scenarioConfigs: Record<AIScenario, AIScenarioConfig>;  // 场景配置
 }
 
 /**
@@ -56,10 +64,10 @@ export interface AISettings {
  */
 export interface AIScenarioConfig {
   enabled: boolean;           // 是否启用
-  providerId: AIProvider;     // 使用的AI提供商
+  providerId: string;         // 使用的AI提供商ID
   modelId: string;            // 使用的模型ID
-  temperature?: number;       // 温度（可选，覆盖全局设置）
-  maxTokens?: number;         // 最大token数（可选，覆盖全局设置）
+  temperature?: number;       // 温度
+  maxTokens?: number;         // 最大token数
   systemPrompt?: string;      // 系统提示词
   costLimit?: number;         // 成本限制（美元/月）
 }
@@ -93,6 +101,7 @@ export interface ChatSession {
   createdAt: number;
   updatedAt: number;
   modelId: string;
+  providerId: string;  // 关联的提供商ID
   novelId?: string;
 }
 
@@ -105,6 +114,7 @@ export interface ChatCompletionRequest {
   temperature?: number;
   maxTokens?: number;
   stop?: string[];
+  providerId?: string;  // 指定提供商ID
 }
 
 /**
@@ -130,4 +140,7 @@ export interface CreativePrompt {
   content: string;
   category: string;
   tags: string[];
-} 
+}
+
+// 为了兼容旧版本，保留AIProvider枚举别名
+export const AIProvider = AIProviderType; 

@@ -1,4 +1,4 @@
-import { AIProvider } from '../types';
+import { AIProviderType } from '../types';
 import { AIBaseService } from './ai-base-service';
 import aiServiceManager from './ai-service-manager';
 import { OpenAIService } from './openai-service';
@@ -10,11 +10,11 @@ import { chatService } from './chat-service';
 import { AISettingsService } from './ai-settings-service';
 
 // 注册所有AI服务
-aiServiceManager.registerService(AIProvider.OPENAI, new OpenAIService());
-aiServiceManager.registerService(AIProvider.DEEPSEEK, new DeepSeekService());
-aiServiceManager.registerService(AIProvider.OLLAMA, new OllamaService());
-aiServiceManager.registerService(AIProvider.LMSTUDIO, new LMStudioService());
-aiServiceManager.registerService(AIProvider.OPENAI_COMPATIBLE, new OpenAICompatibleService());
+aiServiceManager.registerService(AIProviderType.OPENAI, new OpenAIService());
+aiServiceManager.registerService(AIProviderType.DEEPSEEK, new DeepSeekService());
+aiServiceManager.registerService(AIProviderType.OLLAMA, new OllamaService());
+aiServiceManager.registerService(AIProviderType.LMSTUDIO, new LMStudioService());
+aiServiceManager.registerService(AIProviderType.OPENAI_COMPATIBLE, new OpenAICompatibleService());
 
 export {
   aiServiceManager,

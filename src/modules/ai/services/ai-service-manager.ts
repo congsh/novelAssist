@@ -1,6 +1,6 @@
 import { AIBaseService } from './ai-base-service';
 import { 
-  AIProvider, 
+  AIProviderType, 
   AISettings, 
   AIScenario,
   AIScenarioConfig,
@@ -15,26 +15,26 @@ import {
  * 负责管理和切换不同的AI服务提供商
  */
 class AIServiceManager implements AIBaseService {
-  private services: Map<AIProvider, AIBaseService> = new Map();
+  private services: Map<string, AIBaseService> = new Map();
   private currentService: AIBaseService | null = null;
-  private currentProvider: AIProvider | null = null;
+  private currentProviderId: string | null = null;
   private settings: AISettings | null = null;
   
   /**
    * 注册AI服务
-   * @param provider AI提供商
+   * @param providerId AI提供商ID
    * @param service AI服务实例
    */
-  registerService(provider: AIProvider, service: AIBaseService): void {
-    this.services.set(provider, service);
+  registerService(providerId: string, service: AIBaseService): void {
+    this.services.set(providerId, service);
   }
   
   /**
    * 根据提供商获取AI服务
-   * @param provider AI提供商
+   * @param providerId AI提供商ID
    */
-  getService(provider: AIProvider): AIBaseService | null {
-    return this.services.get(provider) || null;
+  getService(providerId: string): AIBaseService | null {
+    return this.services.get(providerId) || null;
   }
   
   /**
@@ -43,10 +43,37 @@ class AIServiceManager implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     this.settings = settings;
-    const service = this.services.get(settings.provider);
+    
+    // 注册所有提供商中对应的服务(如果尚未注册)
+    settings.providers.forEach(provider => {
+      // 检查是否已经注册了该providerId对应的服务
+      if (!this.services.has(provider.id)) {
+        // 根据provider.type为每个提供商ID注册对应类型的服务
+        // 获取该类型已注册的服务
+        const typeService = this.services.get(provider.type);
+        if (typeService) {
+          console.log(`为提供商 ${provider.id} (${provider.type}) 注册服务`);
+          this.services.set(provider.id, typeService);
+        }
+      }
+    });
+    
+    const service = this.services.get(settings.activeProviderId);
     
     if (!service) {
-      console.error(`未找到提供商 ${settings.provider} 的服务实现`);
+      console.error(`未找到提供商 ${settings.activeProviderId} 的服务实现`);
+      // 尝试使用默认服务
+      if (settings.providers.length > 0 && this.services.size > 0) {
+        // 获取第一个可用的服务
+        const firstServiceKey = Array.from(this.services.keys())[0];
+        const firstService = this.services.get(firstServiceKey);
+        if (firstService) {
+          console.warn(`使用默认服务 ${firstServiceKey} 作为替代`);
+          this.currentService = firstService;
+          this.currentProviderId = firstServiceKey;
+          return true;
+        }
+      }
       return false;
     }
     
@@ -54,7 +81,7 @@ class AIServiceManager implements AIBaseService {
       const result = await service.initialize(settings);
       if (result) {
         this.currentService = service;
-        this.currentProvider = settings.provider;
+        this.currentProviderId = settings.activeProviderId;
       }
       return result;
     } catch (error) {
@@ -230,10 +257,10 @@ class AIServiceManager implements AIBaseService {
   }
   
   /**
-   * 获取当前使用的AI提供商
+   * 获取当前使用的AI提供商ID
    */
-  getCurrentProvider(): AIProvider | null {
-    return this.currentProvider;
+  getCurrentProviderId(): string | null {
+    return this.currentProviderId;
   }
   
   /**

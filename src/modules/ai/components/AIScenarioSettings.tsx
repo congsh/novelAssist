@@ -27,7 +27,7 @@ import {
   PartitionOutlined
 } from '@ant-design/icons';
 import { 
-  AIProvider, 
+  AIProviderType, 
   AIScenario, 
   AIScenarioConfig, 
   AISettings,
@@ -83,14 +83,14 @@ const AIScenarioSettings: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState(false);
   const [activeScenario, setActiveScenario] = useState<AIScenario>(AIScenario.CHAT);
-  const [providers, setProviders] = useState<AIProvider[]>([]);
-  const [models, setModels] = useState<Record<AIProvider, AIModel[]>>({} as Record<AIProvider, AIModel[]>);
+  const [providers, setProviders] = useState<{id: string, name: string, type: AIProviderType}[]>([]);
+  const [models, setModels] = useState<Record<string, AIModel[]>>({});
   
   // 在组件顶层为每个场景创建独立的 useWatch
-  const chatProviderId = Form.useWatch(`${AIScenario.CHAT}_providerId`, form) as AIProvider | undefined;
-  const novelCollaborationProviderId = Form.useWatch(`${AIScenario.NOVEL_COLLABORATION}_providerId`, form) as AIProvider | undefined;
-  const contextEnhancementProviderId = Form.useWatch(`${AIScenario.CONTEXT_ENHANCEMENT}_providerId`, form) as AIProvider | undefined;
-  const novelAnalysisProviderId = Form.useWatch(`${AIScenario.NOVEL_ANALYSIS}_providerId`, form) as AIProvider | undefined;
+  const chatProviderId = Form.useWatch(`${AIScenario.CHAT}_providerId`, form) as string;
+  const novelCollaborationProviderId = Form.useWatch(`${AIScenario.NOVEL_COLLABORATION}_providerId`, form) as string;
+  const contextEnhancementProviderId = Form.useWatch(`${AIScenario.CONTEXT_ENHANCEMENT}_providerId`, form) as string;
+  const novelAnalysisProviderId = Form.useWatch(`${AIScenario.NOVEL_ANALYSIS}_providerId`, form) as string;
   
   const aiSettingsService = AISettingsService.getInstance();
   
@@ -105,17 +105,16 @@ const AIScenarioSettings: React.FC = () => {
       const settings = await aiSettingsService.loadSettings();
       setSettings(settings);
       
-      // 提取所有可用的提供商
-      const availableProviders = Object.values(AIProvider);
-      setProviders(availableProviders);
+      // 设置供应商列表
+      setProviders(settings.providers || []);
       
-      // 获取所有模型
-      const modelsByProvider: Record<AIProvider, AIModel[]> = {} as Record<AIProvider, AIModel[]>;
+      // 获取所有模型并按providerId分组
+      const modelsByProvider: Record<string, AIModel[]> = {};
       settings.models.forEach((model: AIModel) => {
-        if (!modelsByProvider[model.provider]) {
-          modelsByProvider[model.provider] = [];
+        if (!modelsByProvider[model.providerId]) {
+          modelsByProvider[model.providerId] = [];
         }
-        modelsByProvider[model.provider].push(model);
+        modelsByProvider[model.providerId].push(model);
       });
       setModels(modelsByProvider);
       
@@ -138,8 +137,8 @@ const AIScenarioSettings: React.FC = () => {
       formValues[`${scenario}_enabled`] = config.enabled;
       formValues[`${scenario}_providerId`] = config.providerId;
       formValues[`${scenario}_modelId`] = config.modelId;
-      formValues[`${scenario}_temperature`] = config.temperature !== undefined ? config.temperature : settings.temperature;
-      formValues[`${scenario}_maxTokens`] = config.maxTokens !== undefined ? config.maxTokens : settings.maxTokens;
+      formValues[`${scenario}_temperature`] = config.temperature ?? 0.7;
+      formValues[`${scenario}_maxTokens`] = config.maxTokens ?? 1000;
       formValues[`${scenario}_systemPrompt`] = config.systemPrompt || defaultSystemPrompts[scenario];
       formValues[`${scenario}_costLimit`] = config.costLimit || 0;
     });
@@ -149,12 +148,15 @@ const AIScenarioSettings: React.FC = () => {
   
   // 创建默认配置
   const createDefaultConfig = (settings: AISettings, scenario: AIScenario): AIScenarioConfig => {
+    // 获取第一个可用的供应商
+    const defaultProvider = settings.providers[0] || { id: 'default', type: AIProviderType.OPENAI };
+    
     return {
       enabled: false,
-      providerId: settings.provider,
-      modelId: settings.defaultModel,
-      temperature: settings.temperature,
-      maxTokens: settings.maxTokens,
+      providerId: defaultProvider.id,
+      modelId: defaultProvider.defaultModel || 'gpt-3.5-turbo',
+      temperature: 0.7,
+      maxTokens: 1000,
       systemPrompt: defaultSystemPrompts[scenario],
       costLimit: 0
     };
@@ -221,21 +223,32 @@ const AIScenarioSettings: React.FC = () => {
         return;
       }
       
-      // 获取当前场景的提供商
+      // 获取当前场景的提供商ID
       const providerId = values[`${activeScenario}_enabled`] ? 
         values[`${activeScenario}_providerId`] : 
-        settings.provider;
+        settings.activeProviderId;
       
-      // 获取对应的服务
-      const service = aiServiceManager.getService(providerId);
-      
-      if (!service) {
-        message.error(`未找到提供商 ${providerId} 的服务`);
+      if (!providerId) {
+        message.error('未找到有效的提供商ID');
         return;
       }
       
+      // 获取对应的提供商
+      const provider = settings.providers.find(p => p.id === providerId);
+      
+      if (!provider) {
+        message.error(`未找到ID为 ${providerId} 的提供商`);
+        return;
+      }
+      
+      // 临时设置当前提供商为活动提供商
+      const tempSettings = {
+        ...settings,
+        activeProviderId: providerId
+      };
+      
       // 测试连接
-      const success = await service.testConnection();
+      const success = await aiServiceManager.initialize(tempSettings);
       
       if (success) {
         message.success('连接成功');
@@ -325,7 +338,7 @@ const AIScenarioSettings: React.FC = () => {
                   >
                     <Select placeholder="选择AI提供商">
                       {providers.map(provider => (
-                        <Option key={provider} value={provider}>{provider}</Option>
+                        <Option key={provider.id} value={provider.id}>{provider.name}</Option>
                       ))}
                     </Select>
                   </Form.Item>
@@ -337,8 +350,8 @@ const AIScenarioSettings: React.FC = () => {
                   >
                     <Select placeholder="选择模型">
                       {scenarioProviders[scenario] && 
-                        models[scenarioProviders[scenario] as AIProvider]?.map((model: AIModel) => (
-                          <Option key={model.id} value={model.name}>{model.name}</Option>
+                        models[scenarioProviders[scenario]]?.map((model: AIModel) => (
+                          <Option key={model.id} value={model.id}>{model.name}</Option>
                         ))}
                     </Select>
                   </Form.Item>
