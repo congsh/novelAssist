@@ -183,76 +183,80 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
     : prompts;
   
   return (
-    <div>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Select
-          style={{ width: 200 }}
-          placeholder="选择分类"
-          allowClear
-          onChange={value => setSelectedCategory(value)}
-        >
-          {categories.map(category => (
-            <Option key={category} value={category}>{category}</Option>
-          ))}
-        </Select>
-        
-        <Button 
-          type="primary" 
-          icon={<PlusOutlined />} 
-          onClick={showAddModal}
-        >
-          添加提示词
-        </Button>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Select
+            style={{ width: 200 }}
+            placeholder="选择分类"
+            allowClear
+            onChange={value => setSelectedCategory(value)}
+          >
+            {categories.map(category => (
+              <Option key={category} value={category}>{category}</Option>
+            ))}
+          </Select>
+          
+          <Button 
+            type="primary" 
+            icon={<PlusOutlined />} 
+            onClick={showAddModal}
+          >
+            添加提示词
+          </Button>
+        </div>
       </div>
       
-      {filteredPrompts.map(prompt => (
-        <Card 
-          key={prompt.id}
-          size="small"
-          style={{ marginBottom: 8 }}
-          title={prompt.title}
-          extra={
-            <div>
-              <Tooltip title="编辑">
-                <Button 
-                  type="text" 
-                  icon={<EditOutlined />} 
-                  onClick={() => showEditModal(prompt)}
-                  style={{ marginRight: 8 }}
-                />
-              </Tooltip>
-              <Tooltip title="删除">
-                <Button 
-                  type="text" 
-                  danger
-                  icon={<DeleteOutlined />} 
-                  onClick={() => handleDeletePrompt(prompt)}
-                />
-              </Tooltip>
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        {filteredPrompts.map(prompt => (
+          <Card 
+            key={prompt.id}
+            size="small"
+            style={{ marginBottom: 8 }}
+            title={prompt.title}
+            extra={
+              <div>
+                <Tooltip title="编辑">
+                  <Button 
+                    type="text" 
+                    icon={<EditOutlined />} 
+                    onClick={() => showEditModal(prompt)}
+                    style={{ marginRight: 8 }}
+                  />
+                </Tooltip>
+                <Tooltip title="删除">
+                  <Button 
+                    type="text" 
+                    danger
+                    icon={<DeleteOutlined />} 
+                    onClick={() => handleDeletePrompt(prompt)}
+                  />
+                </Tooltip>
+              </div>
+            }
+          >
+            <div style={{ marginBottom: 8 }}>
+              <div style={{ color: '#666', marginBottom: 8 }}>
+                分类: <Tag color="blue">{prompt.category}</Tag>
+              </div>
+              <div>
+                {prompt.tags.map(tag => (
+                  <Tag key={tag}>{tag}</Tag>
+                ))}
+              </div>
             </div>
-          }
-        >
-          <div style={{ marginBottom: 8 }}>
-            <div style={{ color: '#666', marginBottom: 8 }}>
-              分类: <Tag color="blue">{prompt.category}</Tag>
+            
+            <div style={{ marginTop: 16 }}>
+              <Button 
+                type="primary" 
+                onClick={() => onUsePrompt(prompt.content)}
+              >
+                使用此提示词
+              </Button>
             </div>
-            <div>
-              {prompt.tags.map(tag => (
-                <Tag key={tag}>{tag}</Tag>
-              ))}
-            </div>
-          </div>
-          
-          <div style={{ marginTop: 16 }}>
-            <Button 
-              type="primary" 
-              onClick={() => onUsePrompt(prompt.content)}
-            >
-              使用此提示词
-            </Button>
-          </div>
-        </Card>
-      ))}
+          </Card>
+        ))}
+      </div>
       
       <Modal
         title={editingPrompt ? '编辑提示词' : '添加提示词'}

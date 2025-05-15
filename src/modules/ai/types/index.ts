@@ -10,6 +10,16 @@ export enum AIProvider {
 }
 
 /**
+ * AI场景类型
+ */
+export enum AIScenario {
+  CHAT = 'chat',                // 对话聊天
+  NOVEL_COLLABORATION = 'novel_collaboration', // 小说协作
+  CONTEXT_ENHANCEMENT = 'context_enhancement', // 上下文补充
+  NOVEL_ANALYSIS = 'novel_analysis'  // 小说拆解分析
+}
+
+/**
  * AI模型类型
  */
 export interface AIModel {
@@ -20,12 +30,15 @@ export interface AIModel {
   maxTokens?: number;
   contextWindow?: number;
   capabilities?: string[];
+  costPerToken?: number;  // 每千token的成本（美元）
 }
 
 /**
  * AI设置接口
  */
 export interface AISettings {
+  id?: string;           // 配置ID，用于多配置管理
+  name?: string;         // 配置名称，用于显示
   provider: AIProvider;
   apiKey?: string;
   baseUrl?: string;
@@ -35,6 +48,20 @@ export interface AISettings {
   maxTokens: number;
   proxyUrl?: string;
   localServerUrl?: string;
+  scenarioConfigs?: Record<AIScenario, AIScenarioConfig>;  // 不同场景的配置
+}
+
+/**
+ * AI场景配置
+ */
+export interface AIScenarioConfig {
+  enabled: boolean;           // 是否启用
+  providerId: AIProvider;     // 使用的AI提供商
+  modelId: string;            // 使用的模型ID
+  temperature?: number;       // 温度（可选，覆盖全局设置）
+  maxTokens?: number;         // 最大token数（可选，覆盖全局设置）
+  systemPrompt?: string;      // 系统提示词
+  costLimit?: number;         // 成本限制（美元/月）
 }
 
 /**

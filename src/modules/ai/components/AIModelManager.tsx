@@ -221,23 +221,26 @@ const AIModelManager: React.FC = () => {
   ];
 
   return (
-    <Card title="AI模型管理">
-      <Button
-        type="primary"
-        icon={<PlusOutlined />}
-        onClick={showAddModal}
-        style={{ marginBottom: 16 }}
-      >
-        添加模型
-      </Button>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ marginBottom: 16 }}>
+        <Button
+          type="primary"
+          icon={<PlusOutlined />}
+          onClick={showAddModal}
+        >
+          添加模型
+        </Button>
+      </div>
       
-      <Table
-        dataSource={models}
-        columns={columns}
-        rowKey="id"
-        loading={loading}
-        pagination={false}
-      />
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <Table
+          dataSource={models}
+          columns={columns}
+          rowKey="id"
+          loading={loading}
+          pagination={false}
+        />
+      </div>
       
       <Modal
         title={editingModel ? '编辑模型' : '添加模型'}
@@ -316,7 +319,7 @@ const AIModelManager: React.FC = () => {
           </Form.Item>
         </Form>
       </Modal>
-    </Card>
+    </div>
   );
 };
 

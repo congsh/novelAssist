@@ -194,6 +194,7 @@ const { initNovelAssociationHandlers } = require('./ipc/novel-association-handle
 const { initBackupHandlers } = require('./ipc/backup-handler');
 const { initStatisticsHandlers } = require('./ipc/statistics-handler');
 const { registerAIHandlers } = require('./ipc/ai-handler');
+const { registerSettingsHandlers } = require('./ipc/settings-handler');
 
 // 初始化人物和时间线IPC处理器
 initCharacterHandlers();
@@ -201,4 +202,5 @@ initTimelineHandlers();
 initNovelAssociationHandlers();
 initBackupHandlers();
 initStatisticsHandlers();
-registerAIHandlers(); 
+registerAIHandlers();
+registerSettingsHandlers(); 

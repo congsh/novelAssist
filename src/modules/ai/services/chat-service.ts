@@ -4,7 +4,8 @@ import {
   ChatCompletionResponse, 
   ChatMessage, 
   ChatMessageRole, 
-  ChatSession 
+  ChatSession,
+  AIScenario
 } from '../types';
 import { aiServiceManager } from './index';
 import { AISettingsService } from './ai-settings-service';
@@ -29,6 +30,9 @@ export class ChatService {
     return ChatService.instance;
   }
   
+  /**
+   * 私有构造函数
+   */
   private constructor() {
     this.aiSettingsService = AISettingsService.getInstance();
   }
@@ -208,10 +212,12 @@ export class ChatService {
    * 发送消息到AI并获取响应
    * @param content 用户消息内容
    * @param onUpdate 流式响应更新回调
+   * @param scenario 可选的AI场景
    */
   async sendMessage(
     content: string, 
-    onUpdate?: (message: ChatMessage) => void
+    onUpdate?: (message: ChatMessage) => void,
+    scenario?: AIScenario
   ): Promise<ChatCompletionResponse> {
     if (this.isStreaming) {
       throw new Error('已有正在进行的消息流传输');
@@ -240,16 +246,17 @@ export class ChatService {
       this.isStreaming = true;
       
       if (onUpdate) {
-        // 流式响应
+        // 流式响应，传递场景参数
         response = await aiServiceManager.createChatCompletionStream(
           request,
           (partialResponse) => {
             onUpdate(partialResponse);
-          }
+          },
+          scenario
         );
       } else {
-        // 普通响应
-        response = await aiServiceManager.createChatCompletion(request);
+        // 普通响应，传递场景参数
+        response = await aiServiceManager.createChatCompletion(request, scenario);
       }
       
       // 将AI响应添加到会话

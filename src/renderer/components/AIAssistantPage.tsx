@@ -12,7 +12,7 @@ import { chatService } from '../../modules/ai/services/chat-service';
 import AISettings from '../../modules/ai/components/AISettings';
 import ChatSessionList from '../../modules/ai/components/ChatSessionList';
 import CreativePrompts from '../../modules/ai/components/CreativePrompts';
-import { ChatMessage, ChatMessageRole, ChatSession } from '../../modules/ai/types';
+import { ChatMessage, ChatMessageRole, ChatSession, AIScenario } from '../../modules/ai/types';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -138,7 +138,7 @@ const AIAssistantPage: React.FC = () => {
       
       setMessages(prev => [...prev, userMessage]);
       
-      // 发送消息到AI并获取响应
+      // 发送消息到AI并获取响应，使用CHAT场景
       await chatService.sendMessage(
         messageContent,
         (partialResponse) => {
@@ -150,7 +150,8 @@ const AIAssistantPage: React.FC = () => {
               return [...prev, partialResponse];
             }
           });
-        }
+        },
+        AIScenario.CHAT
       );
       
       // 更新会话列表
@@ -188,9 +189,9 @@ const AIAssistantPage: React.FC = () => {
       key: 'chat',
       label: <><MessageOutlined /> 聊天</>,
       children: (
-        <Row gutter={16}>
-          <Col xs={24} sm={24} md={6} lg={6} xl={5}>
-            <Card title="会话列表" size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={16} style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}>
+          <Col xs={24} sm={24} md={6} lg={6} xl={5} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Card title="会话列表" size="small" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
               <ChatSessionList 
                 sessions={sessions}
                 currentSessionId={currentSession?.id || null}
@@ -201,9 +202,9 @@ const AIAssistantPage: React.FC = () => {
             </Card>
           </Col>
           
-          <Col xs={24} sm={24} md={18} lg={18} xl={19}>
-            <Card style={{ marginBottom: 16 }}>
-              <div style={{ height: 400, overflow: 'auto', marginBottom: 16, padding: 10, background: '#f9f9f9', borderRadius: 4 }}>
+          <Col xs={24} sm={24} md={18} lg={18} xl={19} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ flex: 1, overflow: 'auto', marginBottom: 16, padding: 10, background: '#f9f9f9', borderRadius: 4 }}>
                 {messages.length === 0 ? (
                   <div style={{ textAlign: 'center', padding: '100px 0', color: '#999' }}>
                     <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
@@ -248,7 +249,7 @@ const AIAssistantPage: React.FC = () => {
                 <div ref={messagesEndRef} />
               </div>
               
-              <Divider />
+              <Divider style={{ margin: '8px 0' }} />
               
               <div>
                 <TextArea
@@ -295,12 +296,12 @@ const AIAssistantPage: React.FC = () => {
     {
       key: 'prompts',
       label: '提示词库',
-      children: <CreativePrompts onUsePrompt={usePrompt} />
+      children: <div style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}><CreativePrompts onUsePrompt={usePrompt} /></div>
     },
     {
       key: 'settings',
       label: <><SettingOutlined /> AI设置</>,
-      children: <AISettings />
+      children: <div style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}><AISettings /></div>
     }
   ];
 
@@ -314,11 +315,21 @@ const AIAssistantPage: React.FC = () => {
   }
 
   return (
-    <div>
-      <Title level={2}>AI助手</Title>
-      <Paragraph>AI助手可以帮助您进行创作，提供灵感和建议</Paragraph>
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div>
+        <Title level={2}>AI助手</Title>
+        <Paragraph>AI助手可以帮助您进行创作，提供灵感和建议</Paragraph>
+      </div>
       
-      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        <Tabs 
+          activeKey={activeTab} 
+          onChange={setActiveTab} 
+          items={tabItems} 
+          style={{ flex: 1, display: 'flex', flexDirection: 'column' }} 
+          className="ai-assistant-tabs"
+        />
+      </div>
     </div>
   );
 };

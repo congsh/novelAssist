@@ -97,72 +97,76 @@ const ChatSessionList: React.FC<ChatSessionListProps> = ({
   };
 
   return (
-    <div>
-      <Button 
-        type="primary" 
-        icon={<PlusOutlined />} 
-        onClick={onSessionCreate}
-        style={{ marginBottom: 16, width: '100%' }}
-      >
-        新建会话
-      </Button>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ marginBottom: 16 }}>
+        <Button 
+          type="primary" 
+          icon={<PlusOutlined />} 
+          onClick={onSessionCreate}
+          style={{ width: '100%' }}
+        >
+          新建会话
+        </Button>
+      </div>
       
-      <List
-        itemLayout="horizontal"
-        dataSource={sessions}
-        renderItem={session => (
-          <List.Item
-            key={session.id}
-            style={{ 
-              cursor: 'pointer',
-              backgroundColor: currentSessionId === session.id ? '#e6f7ff' : 'transparent',
-              padding: '8px 12px',
-              borderRadius: '4px'
-            }}
-            onClick={() => onSessionSelect(session.id)}
-            actions={[
-              <Dropdown 
-                menu={{
-                  items: [
-                    {
-                      key: "rename",
-                      icon: <EditOutlined />,
-                      label: "重命名",
-                      onClick: (e) => {
-                        e.domEvent.stopPropagation();
-                        handleRename(session);
+      <div style={{ flex: 1, overflow: 'auto' }}>
+        <List
+          itemLayout="horizontal"
+          dataSource={sessions}
+          renderItem={session => (
+            <List.Item
+              key={session.id}
+              style={{ 
+                cursor: 'pointer',
+                backgroundColor: currentSessionId === session.id ? '#e6f7ff' : 'transparent',
+                padding: '8px 12px',
+                borderRadius: '4px'
+              }}
+              onClick={() => onSessionSelect(session.id)}
+              actions={[
+                <Dropdown 
+                  menu={{
+                    items: [
+                      {
+                        key: "rename",
+                        icon: <EditOutlined />,
+                        label: "重命名",
+                        onClick: (e) => {
+                          e.domEvent.stopPropagation();
+                          handleRename(session);
+                        }
+                      },
+                      {
+                        key: "delete",
+                        icon: <DeleteOutlined />,
+                        label: "删除",
+                        danger: true,
+                        onClick: (e) => {
+                          e.domEvent.stopPropagation();
+                          handleDelete(session);
+                        }
                       }
-                    },
-                    {
-                      key: "delete",
-                      icon: <DeleteOutlined />,
-                      label: "删除",
-                      danger: true,
-                      onClick: (e) => {
-                        e.domEvent.stopPropagation();
-                        handleDelete(session);
-                      }
-                    }
-                  ]
-                }}
-                trigger={['click']}
-              >
-                <Button 
-                  type="text" 
-                  icon={<MoreOutlined />}
-                  onClick={(e) => e.stopPropagation()}
-                />
-              </Dropdown>
-            ]}
-          >
-            <List.Item.Meta
-              avatar={<MessageOutlined />}
-              title={session.title}
-              description={formatDate(session.updatedAt)}
-            />
-          </List.Item>
-        )}
-      />
+                    ]
+                  }}
+                  trigger={['click']}
+                >
+                  <Button 
+                    type="text" 
+                    icon={<MoreOutlined />}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                </Dropdown>
+              ]}
+            >
+              <List.Item.Meta
+                avatar={<MessageOutlined />}
+                title={session.title}
+                description={formatDate(session.updatedAt)}
+              />
+            </List.Item>
+          )}
+        />
+      </div>
       
       <Modal
         title="重命名会话"
