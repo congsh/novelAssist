@@ -248,6 +248,60 @@ function initCharacterHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * 获取人物关系
+   * @param {Object} event - IPC事件对象
+   * @param {Object} data - 请求参数，包含novelId
+   * @returns {Promise<Object>} - 包含人物关系图数据的响应对象
+   */
+  ipcMain.handle('get-character-relationships', async (event, data) => {
+    try {
+      // 等待数据库初始化完成
+      await dbManager.waitForInitialization();
+      
+      if (!data.novelId) {
+        return { success: false, error: '小说ID不能为空' };
+      }
+      
+      // 获取小说中的所有人物
+      const characters = await dbManager.query(
+        'SELECT id, name, role FROM characters WHERE novel_id = ?',
+        [data.novelId]
+      );
+      
+      // 获取人物之间的关系
+      const relationships = await dbManager.query(
+        `SELECT * FROM relationships 
+         WHERE novel_id = ? 
+         AND entity1_type = 'character' AND entity2_type = 'character'`,
+        [data.novelId]
+      );
+      
+      // 构建图数据
+      const nodes = characters.map(character => ({
+        id: character.id,
+        name: character.name,
+        role: character.role,
+        group: character.role || 'other'
+      }));
+      
+      const links = relationships.map(rel => ({
+        source: rel.entity1_id,
+        target: rel.entity2_id,
+        type: rel.relationship_type,
+        description: rel.description
+      }));
+      
+      return {
+        success: true,
+        data: { nodes, links }
+      };
+    } catch (error) {
+      console.error('获取人物关系失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 module.exports = {

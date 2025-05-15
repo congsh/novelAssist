@@ -234,6 +234,52 @@ function initLocationHandlers() {
       return { success: false, error: error.message };
     }
   });
+
+  /**
+   * 获取地点地图数据
+   * @param {Object} event - IPC事件对象
+   * @param {Object} data - 请求参数，包含novelId
+   * @returns {Promise<Object>} - 包含地点地图数据的响应对象
+   */
+  ipcMain.handle('get-location-map-data', async (event, data) => {
+    try {
+      // A如待数据库初始化完成
+      await dbManager.waitForInitialization();
+      
+      if (!data.novelId) {
+        return { success: false, error: '小说ID不能为空' };
+      }
+
+      // 获取指定小说的所有地点
+      const locations = await dbManager.query(
+        'SELECT * FROM locations WHERE novel_id = ? ORDER BY importance ASC',
+        [data.novelId]
+      );
+
+      // 处理坐标数据
+      const processedLocations = locations.map(location => {
+        let coordinates = null;
+        
+        if (location.coordinates) {
+          try {
+            coordinates = JSON.parse(location.coordinates);
+          } catch (e) {
+            console.error('解析地点坐标失败:', e);
+          }
+        }
+
+        return {
+          ...location,
+          coordinates
+        };
+      });
+
+      return { success: true, data: processedLocations };
+    } catch (error) {
+      console.error('获取地点地图数据失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
 }
 
 // 初始化处理器
