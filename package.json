@@ -5,6 +5,7 @@
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
+    "start:win": "start.bat",
     "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
     "dev:react": "cross-env NODE_ENV=development webpack serve --config config/webpack.config.js",
     "dev:electron": "cross-env NODE_ENV=development electron .",

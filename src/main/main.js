@@ -1,6 +1,23 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron');
 const path = require('path');
 const url = require('url');
+const fs = require('fs');
+const logger = require('./utils/logger');
+
+// 设置控制台编码为UTF-8
+process.env.LANG = 'zh_CN.UTF-8';
+process.env.LC_ALL = 'zh_CN.UTF-8';
+process.env.LC_CTYPE = 'zh_CN.UTF-8';
+
+// 如果是Windows平台，设置控制台代码页为65001(UTF-8)
+if (process.platform === 'win32') {
+  try {
+    require('child_process').execSync('chcp 65001');
+    logger.info('已设置控制台代码页为UTF-8');
+  } catch (error) {
+    logger.error('设置控制台代码页失败:', error);
+  }
+}
 
 /**
  * 创建主窗口
@@ -30,7 +47,7 @@ function createWindow() {
         'Content-Security-Policy': [
           process.env.NODE_ENV === 'development'
             ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 http://localhost:3000 https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data: http://localhost:3000"
-            : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data:"
+            : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data:"
         ]
       }
     });
@@ -40,32 +57,66 @@ function createWindow() {
   const startUrl = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000'
     : url.format({
-        pathname: path.join(__dirname, '../../build/index.html'),
+        pathname: path.resolve(app.getAppPath(), 'build/index.html'),
         protocol: 'file:',
         slashes: true
       });
   
-  mainWindow.loadURL(startUrl);
+  // 尝试加载URL
+  try {
+    mainWindow.loadURL(startUrl);
+    logger.info(`尝试加载URL: ${startUrl}`);
+  } catch (error) {
+    logger.error('加载URL失败:', error);
+    
+    // 如果加载失败，尝试备用路径
+    const backupUrl = url.format({
+      pathname: path.resolve(app.getAppPath(), 'build/index.html'),
+      protocol: 'file:',
+      slashes: true
+    });
+    
+    logger.info(`尝试加载备用URL: ${backupUrl}`);
+    mainWindow.loadURL(backupUrl);
+  }
 
   // 开发环境下打开DevTools
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
-    console.log('开发环境：加载URL -', startUrl);
+    logger.info(`开发环境：加载URL - ${startUrl}`);
+  } else {
+    logger.info(`生产环境：加载URL - ${startUrl}`);
+    logger.info(`__dirname: ${__dirname}`);
+    logger.info(`index.html路径: ${path.join(__dirname, '../../build/index.html')}`);
+    
+    const indexPath = path.join(__dirname, '../../build/index.html');
+    const exists = fs.existsSync(indexPath);
+    logger.info(`index.html是否存在: ${exists}`);
+    
+    if (exists) {
+      try {
+        const content = fs.readFileSync(indexPath, 'utf8');
+        logger.info(`index.html内容长度: ${content.length}`);
+        logger.info(`index.html前100个字符: ${content.substring(0, 100)}`);
+      } catch (error) {
+        logger.error('读取index.html失败:', error);
+      }
+    }
   }
   
   // 监听页面加载完成事件
   mainWindow.webContents.on('did-finish-load', () => {
-    console.log('页面加载完成');
+    logger.info('页面加载完成');
   });
   
   // 监听页面加载失败事件
   mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.error('页面加载失败:', errorCode, errorDescription);
+    logger.error(`页面加载失败: ${errorCode} - ${errorDescription}`);
     
     // 如果是开发环境且加载失败，可能是webpack-dev-server还未启动，尝试延迟重新加载
     if (process.env.NODE_ENV === 'development') {
       setTimeout(() => {
-        console.log('尝试重新加载页面...');
+        logger.info('尝试重新加载页面...');
         mainWindow.loadURL(startUrl);
       }, 3000);
     }
@@ -87,6 +138,8 @@ app.whenReady().then(() => {
   app.on('activate', function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+  
+  logger.info('应用已启动');
 });
 
 /**
@@ -179,6 +232,7 @@ function setupMenu() {
 
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
+  logger.info('应用菜单已设置');
 }
 
 // 加载IPC处理器

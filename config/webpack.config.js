@@ -12,7 +12,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, '../build'),
     filename: 'renderer.js',
-    publicPath: isDevelopment ? '/' : './',
+    publicPath: './',
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js', '.jsx', '.json'],
@@ -76,6 +76,10 @@ module.exports = {
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: true,
+      meta: {
+        charset: { charset: 'UTF-8' },
+        'content-type': { 'http-equiv': 'Content-Type', content: 'text/html; charset=UTF-8' }
+      }
     }),
   ],
   devServer: {
