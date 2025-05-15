@@ -24,7 +24,7 @@ const ToolsPage: React.FC = () => {
       
       <Alert
         message="部分功能已完成"
-        description="地点管理和大纲管理功能已完成开发，可以直接使用。其他辅助工具功能正在开发中，敬请期待！"
+        description="人物管理、地点管理和大纲管理功能已完成开发，可以直接使用。其他辅助工具功能正在开发中，敬请期待！"
         type="info"
         showIcon
         icon={<ToolOutlined />}
@@ -37,13 +37,14 @@ const ToolsPage: React.FC = () => {
             title="人物管理" 
             extra={<UserOutlined />}
             style={{ height: '100%' }}
+            className="completed-feature"
           >
             <Paragraph>
               创建和管理小说中的人物角色，设置性格、背景故事等。
             </Paragraph>
-            <div style={{ color: '#999', fontStyle: 'italic', marginBottom: 12 }}>功能开发中...</div>
+            <div style={{ color: '#52c41a', fontWeight: 'bold', marginBottom: 12 }}>功能已完成</div>
             <Link to="/characters">
-              <Button disabled>查看详情</Button>
+              <Button type="primary">立即使用</Button>
             </Link>
           </Card>
         </Col>

@@ -1,13 +1,34 @@
 const { ipcMain } = require('electron');
+const path = require('path');
+const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const dbManager = require('../database/db-manager');
 const OpenAI = require('openai');
 
 let openai = null;
 
+// 应用数据目录
+const APP_DATA_DIR = path.join(process.env.APPDATA || (process.platform === 'darwin' ? 
+  path.join(process.env.HOME, 'Library/Application Support') : 
+  path.join(process.env.HOME, '.local/share')), 'NovelAssist');
+
+// AI设置文件路径
+const AI_SETTINGS_FILE = path.join(APP_DATA_DIR, 'ai-settings.json');
+
+// 聊天会话目录
+const CHAT_SESSIONS_DIR = path.join(APP_DATA_DIR, 'chat-sessions');
+
+// 确保目录存在
+if (!fs.existsSync(APP_DATA_DIR)) {
+  fs.mkdirSync(APP_DATA_DIR, { recursive: true });
+}
+
+if (!fs.existsSync(CHAT_SESSIONS_DIR)) {
+  fs.mkdirSync(CHAT_SESSIONS_DIR, { recursive: true });
+}
+
 /**
- * 初始化OpenAI客户端
- * @param {string} apiKey - OpenAI API密钥
+ * 初始化OpenAI API客户端
  */
 function initializeOpenAI(apiKey) {
   try {
@@ -16,287 +37,177 @@ function initializeOpenAI(apiKey) {
     });
     return true;
   } catch (error) {
-    console.error('初始化OpenAI客户端失败:', error);
+    console.error('初始化OpenAI API失败:', error);
     return false;
   }
 }
 
 /**
- * 注册AI相关的IPC处理器
+ * 保存AI设置
  */
-function registerAIHandlers() {
-  // 初始化AI服务
-  ipcMain.handle('initialize-ai', async (event, { apiKey }) => {
-    try {
-      const success = initializeOpenAI(apiKey);
-      return { success };
-    } catch (error) {
-      console.error('初始化AI服务失败:', error);
-      return { success: false, error: error.message };
+function saveAISettings(settings) {
+  try {
+    // 敏感信息加密处理（简单示例，实际应用中应使用更安全的加密方法）
+    const settingsToSave = { ...settings };
+    if (settingsToSave.apiKey) {
+      // 这里只是简单示例，实际应该使用更安全的加密方法
+      settingsToSave.apiKey = Buffer.from(settingsToSave.apiKey).toString('base64');
     }
-  });
-
-  // 生成内容
-  ipcMain.handle('generate-content', async (event, { prompt, model = 'gpt-3.5-turbo', temperature = 0.7, maxTokens = 1000 }) => {
-    try {
-      if (!openai) {
-        return { success: false, error: 'AI服务未初始化' };
-      }
-
-      const response = await openai.chat.completions.create({
-        model: model,
-        messages: [{ role: 'user', content: prompt }],
-        temperature: temperature,
-        max_tokens: maxTokens
-      });
-
-      return { 
-        success: true, 
-        data: {
-          content: response.choices[0].message.content,
-          usage: response.usage
-        } 
-      };
-    } catch (error) {
-      console.error('生成内容失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 获取AI提示模板列表
-  ipcMain.handle('get-ai-prompts', async (event, { category }) => {
-    try {
-      let query = `
-        SELECT id, title, content, category, is_system, created_at, updated_at
-        FROM ai_prompts
-      `;
-      
-      const params = [];
-      
-      if (category) {
-        query += ' WHERE category = ?';
-        params.push(category);
-      }
-      
-      query += ' ORDER BY is_system DESC, title ASC';
-      
-      const prompts = await dbManager.query(query, params);
-      return { success: true, data: prompts };
-    } catch (error) {
-      console.error('获取AI提示模板列表失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 获取单个AI提示模板
-  ipcMain.handle('get-ai-prompt', async (event, { id }) => {
-    try {
-      const prompt = await dbManager.get(`
-        SELECT id, title, content, category, is_system, created_at, updated_at, metadata
-        FROM ai_prompts
-        WHERE id = ?
-      `, [id]);
-      
-      if (!prompt) {
-        return { success: false, error: '提示模板不存在' };
-      }
-      
-      return { success: true, data: prompt };
-    } catch (error) {
-      console.error('获取AI提示模板失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 创建AI提示模板
-  ipcMain.handle('create-ai-prompt', async (event, promptData) => {
-    try {
-      const id = uuidv4();
-      const now = new Date().toISOString();
-      
-      const result = await dbManager.run(`
-        INSERT INTO ai_prompts (
-          id, title, content, category, is_system, created_at, updated_at, metadata
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        id,
-        promptData.title,
-        promptData.content,
-        promptData.category,
-        promptData.is_system ? 1 : 0,
-        now,
-        now,
-        promptData.metadata ? JSON.stringify(promptData.metadata) : null
-      ]);
-      
-      return { 
-        success: true, 
-        data: { 
-          id, 
-          ...promptData, 
-          created_at: now, 
-          updated_at: now
-        } 
-      };
-    } catch (error) {
-      console.error('创建AI提示模板失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 更新AI提示模板
-  ipcMain.handle('update-ai-prompt', async (event, { id, ...updateData }) => {
-    try {
-      const prompt = await dbManager.get('SELECT * FROM ai_prompts WHERE id = ?', [id]);
-      
-      if (!prompt) {
-        return { success: false, error: '提示模板不存在' };
-      }
-      
-      // 系统模板不允许修改
-      if (prompt.is_system && !updateData.is_system) {
-        return { success: false, error: '系统模板不允许修改' };
-      }
-      
-      const now = new Date().toISOString();
-      const updates = [];
-      const params = [];
-      
-      // 构建动态更新语句
-      Object.keys(updateData).forEach(key => {
-        if (key === 'metadata') {
-          updates.push(`${key} = ?`);
-          params.push(updateData[key] ? JSON.stringify(updateData[key]) : null);
-        } else if (key === 'is_system') {
-          updates.push(`${key} = ?`);
-          params.push(updateData[key] ? 1 : 0);
-        } else if (key !== 'id' && key !== 'created_at') {
-          updates.push(`${key} = ?`);
-          params.push(updateData[key]);
-        }
-      });
-      
-      updates.push('updated_at = ?');
-      params.push(now);
-      params.push(id);
-      
-      await dbManager.run(`
-        UPDATE ai_prompts
-        SET ${updates.join(', ')}
-        WHERE id = ?
-      `, params);
-      
-      return { 
-        success: true, 
-        data: { 
-          id, 
-          ...prompt, 
-          ...updateData, 
-          updated_at: now 
-        } 
-      };
-    } catch (error) {
-      console.error('更新AI提示模板失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 删除AI提示模板
-  ipcMain.handle('delete-ai-prompt', async (event, { id }) => {
-    try {
-      const prompt = await dbManager.get('SELECT * FROM ai_prompts WHERE id = ?', [id]);
-      
-      if (!prompt) {
-        return { success: false, error: '提示模板不存在' };
-      }
-      
-      // 系统模板不允许删除
-      if (prompt.is_system) {
-        return { success: false, error: '系统模板不允许删除' };
-      }
-      
-      await dbManager.run('DELETE FROM ai_prompts WHERE id = ?', [id]);
-      
-      return { success: true };
-    } catch (error) {
-      console.error('删除AI提示模板失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
-
-  // 分析文本（提取人物、地点等）
-  ipcMain.handle('analyze-text', async (event, { text, novelId, analysisType }) => {
-    try {
-      if (!openai) {
-        return { success: false, error: 'AI服务未初始化' };
-      }
-
-      let prompt = '';
-      
-      switch (analysisType) {
-        case 'characters':
-          prompt = `从以下文本中提取所有人物信息，包括姓名、性格特点、外貌描述等。以JSON格式返回，格式为：[{"name": "姓名", "traits": ["特点1", "特点2"], "appearance": "外貌描述"}]。文本内容：\n\n${text}`;
-          break;
-        case 'locations':
-          prompt = `从以下文本中提取所有地点信息，包括名称、描述等。以JSON格式返回，格式为：[{"name": "地点名称", "description": "地点描述"}]。文本内容：\n\n${text}`;
-          break;
-        case 'outline':
-          prompt = `为以下文本生成一个详细的大纲，包括主要情节点。以JSON格式返回，格式为：[{"title": "标题", "content": "内容描述"}]。文本内容：\n\n${text}`;
-          break;
-        case 'timeline':
-          prompt = `从以下文本中提取时间线事件，按时间顺序排列。以JSON格式返回，格式为：[{"title": "事件标题", "description": "事件描述", "date": "事件日期/时间"}]。文本内容：\n\n${text}`;
-          break;
-        default:
-          return { success: false, error: '不支持的分析类型' };
-      }
-
-      const response = await openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 2000
-      });
-
-      const content = response.choices[0].message.content;
-      let parsedData = [];
-      
-      try {
-        // 尝试解析返回的JSON
-        const jsonMatch = content.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          parsedData = JSON.parse(jsonMatch[0]);
-        } else {
-          parsedData = JSON.parse(content);
-        }
-      } catch (parseError) {
-        console.error('解析AI返回的JSON失败:', parseError);
-        return { 
-          success: true, 
-          data: {
-            raw: content,
-            parsed: false
-          } 
-        };
-      }
-
-      return { 
-        success: true, 
-        data: {
-          results: parsedData,
-          raw: content,
-          parsed: true,
-          usage: response.usage
-        } 
-      };
-    } catch (error) {
-      console.error('分析文本失败:', error);
-      return { success: false, error: error.message };
-    }
-  });
+    
+    fs.writeFileSync(AI_SETTINGS_FILE, JSON.stringify(settingsToSave, null, 2));
+    return true;
+  } catch (error) {
+    console.error('保存AI设置失败:', error);
+    return false;
+  }
 }
 
-// 注册所有处理器
-registerAIHandlers();
+/**
+ * 加载AI设置
+ */
+function loadAISettings() {
+  try {
+    if (fs.existsSync(AI_SETTINGS_FILE)) {
+      const settings = JSON.parse(fs.readFileSync(AI_SETTINGS_FILE, 'utf8'));
+      
+      // 解密敏感信息
+      if (settings.apiKey) {
+        settings.apiKey = Buffer.from(settings.apiKey, 'base64').toString('utf8');
+      }
+      
+      return settings;
+    }
+    return null;
+  } catch (error) {
+    console.error('加载AI设置失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 保存聊天会话
+ */
+function saveChatSession(session) {
+  try {
+    const sessionFile = path.join(CHAT_SESSIONS_DIR, `${session.id}.json`);
+    fs.writeFileSync(sessionFile, JSON.stringify(session, null, 2));
+    return true;
+  } catch (error) {
+    console.error('保存聊天会话失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 加载聊天会话
+ */
+function loadChatSession(sessionId) {
+  try {
+    const sessionFile = path.join(CHAT_SESSIONS_DIR, `${sessionId}.json`);
+    if (fs.existsSync(sessionFile)) {
+      return JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    }
+    return null;
+  } catch (error) {
+    console.error('加载聊天会话失败:', error);
+    return null;
+  }
+}
+
+/**
+ * 获取所有聊天会话
+ */
+function getAllChatSessions() {
+  try {
+    const sessions = [];
+    const files = fs.readdirSync(CHAT_SESSIONS_DIR);
+    
+    for (const file of files) {
+      if (file.endsWith('.json')) {
+        const sessionFile = path.join(CHAT_SESSIONS_DIR, file);
+        const session = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+        sessions.push(session);
+      }
+    }
+    
+    return sessions;
+  } catch (error) {
+    console.error('获取所有聊天会话失败:', error);
+    return [];
+  }
+}
+
+/**
+ * 删除聊天会话
+ */
+function deleteChatSession(sessionId) {
+  try {
+    const sessionFile = path.join(CHAT_SESSIONS_DIR, `${sessionId}.json`);
+    if (fs.existsSync(sessionFile)) {
+      fs.unlinkSync(sessionFile);
+    }
+    return true;
+  } catch (error) {
+    console.error('删除聊天会话失败:', error);
+    return false;
+  }
+}
+
+/**
+ * 注册AI IPC处理器
+ */
+function registerAIHandlers() {
+  // 原有的OpenAI相关处理
+  ipcMain.handle('ai:initialize', async (event, apiKey) => {
+    return initializeOpenAI(apiKey);
+  });
+
+  ipcMain.handle('ai:generate-text', async (event, prompt) => {
+    try {
+      if (!openai) {
+        return { error: 'OpenAI API未初始化' };
+      }
+
+      const completion = await openai.completions.create({
+        model: 'text-davinci-003',
+        prompt: prompt,
+        max_tokens: 1000,
+        temperature: 0.7
+      });
+
+      return { text: completion.choices[0].text };
+    } catch (error) {
+      console.error('生成文本失败:', error);
+      return { error: error.message };
+    }
+  });
+  
+  // AI设置相关
+  ipcMain.handle('ai:save-settings', (event, settings) => {
+    return saveAISettings(settings);
+  });
+  
+  ipcMain.handle('ai:load-settings', () => {
+    return loadAISettings();
+  });
+  
+  // 聊天会话相关
+  ipcMain.handle('ai:save-chat-session', (event, session) => {
+    return saveChatSession(session);
+  });
+  
+  ipcMain.handle('ai:load-chat-session', (event, sessionId) => {
+    return loadChatSession(sessionId);
+  });
+  
+  ipcMain.handle('ai:get-all-chat-sessions', () => {
+    return getAllChatSessions();
+  });
+  
+  ipcMain.handle('ai:delete-chat-session', (event, sessionId) => {
+    return deleteChatSession(sessionId);
+  });
+}
 
 module.exports = {
   registerAIHandlers,
