@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import {   Layout,   Button,   Input,   Spin,   Typography,   Tooltip,   Space,   Drawer,  Tabs,  List,  Card,  Divider,  Statistic,  Switch,  App} from 'antd';
+import {   Layout,   Button,   Input,   Spin,   Typography,   Tooltip,   Space,   Drawer,  Tabs,  List,  Card,  Divider,  Statistic,  Switch,  App, notification} from 'antd';
 import { 
   SaveOutlined, 
   ArrowLeftOutlined, 
@@ -25,6 +25,7 @@ import ThemeSelector from './ThemeSelector';
 import EditorSidebar from './EditorSidebar';
 import VersionService from '../services/VersionService';
 import ThemeService from '../services/ThemeService';
+import EditorAIPanel from '../../ai/components/EditorAIPanel';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
@@ -534,12 +535,196 @@ const Editor: React.FC = () => {
           width={400}
         >
           <div style={{ padding: 16 }}>
-            <p>AI写作助手功能即将推出，敬请期待！</p>
+            {chapter ? (
+              <EditorAIPanel
+                chapterId={chapterId || ''}
+                novelId={novelId || ''}
+                content={draftToHtml(convertToRaw(editorState.getCurrentContent()))}
+                selection={getSelectedText(editorState)}
+                cursorPosition={editorState.getSelection().getStartOffset()}
+                title={title}
+                onApplyChanges={(newContent) => {
+                  // 将新内容转换为EditorState
+                  const contentBlock = htmlToDraft(newContent);
+                  if (contentBlock) {
+                    const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
+                    setEditorState(EditorState.createWithContent(contentState));
+                    
+                    // 标记内容已更改
+                    contentChanged.current = true;
+                    
+                    notification.success({
+                      message: 'AI修改已应用',
+                      description: '内容已更新，请记得保存'
+                    });
+                  }
+                }}
+                onCreateCharacter={(characterData) => {
+                  // 创建角色
+                  window.electron.invoke('create-character', {
+                    novel_id: novelId,
+                    name: characterData.name,
+                    gender: characterData.gender,
+                    age: characterData.age,
+                    appearance: characterData.appearance,
+                    personality: characterData.personality,
+                    background: characterData.background
+                  }).then(response => {
+                    if (response.success) {
+                      notification.success({
+                        message: '角色创建成功',
+                        description: `角色 ${characterData.name} 已添加到小说中`
+                      });
+                    } else {
+                      notification.error({
+                        message: '角色创建失败',
+                        description: response.error || '未知错误'
+                      });
+                    }
+                  });
+                }}
+                onCreateLocation={(locationData) => {
+                  // 创建地点
+                  window.electron.invoke('create-location', {
+                    novel_id: novelId,
+                    name: locationData.name,
+                    description: locationData.description,
+                    features: locationData.features,
+                    importance: locationData.importance
+                  }).then(response => {
+                    if (response.success) {
+                      notification.success({
+                        message: '地点创建成功',
+                        description: `地点 ${locationData.name} 已添加到小说中`
+                      });
+                    } else {
+                      notification.error({
+                        message: '地点创建失败',
+                        description: response.error || '未知错误'
+                      });
+                    }
+                  });
+                }}
+                onUpdateOutline={(outlineData) => {
+                  // 更新大纲
+                  window.electron.invoke('update-chapter-outline', {
+                    chapter_id: chapterId,
+                    title: outlineData.title || title,
+                    summary: outlineData.summary,
+                    key_points: JSON.stringify(outlineData.keyPoints),
+                    characters: JSON.stringify(outlineData.characters),
+                    locations: JSON.stringify(outlineData.locations)
+                  }).then(response => {
+                    if (response.success) {
+                      notification.success({
+                        message: '大纲更新成功',
+                        description: '章节大纲已更新'
+                      });
+                    } else {
+                      notification.error({
+                        message: '大纲更新失败',
+                        description: response.error || '未知错误'
+                      });
+                    }
+                  });
+                }}
+                onAddTimeline={(timelineData) => {
+                  // 添加时间线事件
+                  window.electron.invoke('create-timeline-event', {
+                    novel_id: novelId,
+                    title: timelineData.title,
+                    time: timelineData.time,
+                    description: timelineData.description,
+                    characters: JSON.stringify(timelineData.characters),
+                    location: timelineData.location,
+                    chapter_id: chapterId
+                  }).then(response => {
+                    if (response.success) {
+                      notification.success({
+                        message: '时间线事件添加成功',
+                        description: `事件 ${timelineData.title} 已添加到时间线`
+                      });
+                    } else {
+                      notification.error({
+                        message: '时间线事件添加失败',
+                        description: response.error || '未知错误'
+                      });
+                    }
+                  });
+                }}
+              />
+            ) : (
+              <p>AI写作助手功能即将推出，敬请期待！</p>
+            )}
           </div>
         </Drawer>
       </Layout>
     </App>
   );
+};
+
+/**
+ * 获取编辑器中选中的文本
+ * @param editorState 编辑器状态
+ * @returns 选中的文本，如果没有选中则返回undefined
+ */
+const getSelectedText = (editorState: EditorState): string | undefined => {
+  const selectionState = editorState.getSelection();
+  
+  // 如果没有选中内容，返回undefined
+  if (selectionState.isCollapsed()) {
+    return undefined;
+  }
+  
+  const contentState = editorState.getCurrentContent();
+  const startKey = selectionState.getStartKey();
+  const endKey = selectionState.getEndKey();
+  const startOffset = selectionState.getStartOffset();
+  const endOffset = selectionState.getEndOffset();
+  
+  // 如果选择在同一个块内
+  if (startKey === endKey) {
+    const block = contentState.getBlockForKey(startKey);
+    return block.getText().slice(startOffset, endOffset);
+  }
+  
+  // 如果跨越多个块
+  let selectedText = '';
+  
+  // 获取所有块
+  let blockKey: string = startKey;
+  let isFirstBlock = true;
+  
+  // 遍历块直到结束块
+  while (blockKey) {
+    const block = contentState.getBlockForKey(blockKey);
+    
+    // 如果是第一个块，从选择开始位置截取
+    if (isFirstBlock) {
+      selectedText += block.getText().slice(startOffset);
+      isFirstBlock = false;
+    } 
+    // 如果是最后一个块，截取到选择结束位置
+    else if (blockKey === endKey) {
+      selectedText += '\n' + block.getText().slice(0, endOffset);
+    } 
+    // 中间的块，全部添加
+    else {
+      selectedText += '\n' + block.getText();
+    }
+    
+    // 如果已经处理到最后一个块，跳出循环
+    if (blockKey === endKey) {
+      break;
+    }
+    
+    // 获取下一个块的key
+    const nextBlock = contentState.getBlockAfter(blockKey);
+    if (!nextBlock) break;
+    blockKey = nextBlock.getKey();
+  }
+  
+  return selectedText;
 };
 
 export default Editor; 

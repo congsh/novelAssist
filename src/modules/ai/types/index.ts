@@ -143,4 +143,75 @@ export interface CreativePrompt {
 }
 
 // 为了兼容旧版本，保留AIProvider枚举别名
-export const AIProvider = AIProviderType; 
+export const AIProvider = AIProviderType;
+
+/**
+ * 编辑器AI操作类型
+ */
+export enum EditorAIActionType {
+  POLISH = 'polish',         // 润色文本
+  CONTINUE = 'continue',     // 续写文本
+  EXTRACT_CHARACTER = 'extract_character', // 提取角色
+  EXTRACT_LOCATION = 'extract_location',   // 提取地点
+  UPDATE_OUTLINE = 'update_outline',       // 更新大纲
+  ADD_TIMELINE = 'add_timeline',           // 添加时间线
+}
+
+/**
+ * 编辑器AI操作请求
+ */
+export interface EditorAIRequest {
+  actionType: EditorAIActionType;
+  content: string;           // 当前内容
+  selection?: string;        // 选中的文本
+  cursorPosition?: number;   // 光标位置
+  chapterId: string;         // 章节ID
+  novelId: string;           // 小说ID
+  context?: {                // 上下文信息
+    title?: string;          // 章节标题
+    previousContent?: string; // 前一章节内容
+    outline?: any;           // 相关大纲
+    characters?: any[];      // 相关角色
+    locations?: any[];       // 相关地点
+  };
+  instructions?: string;     // 用户特定指令
+}
+
+/**
+ * 编辑器AI操作响应
+ */
+export interface EditorAIResponse {
+  actionType: EditorAIActionType;
+  originalContent: string;   // 原始内容
+  modifiedContent?: string;  // 修改后的内容
+  diff?: TextDiff[];         // 文本差异
+  extractedData?: any;       // 提取的数据（角色、地点等）
+  message?: string;          // 操作消息
+  status: 'success' | 'error' | 'pending'; // 操作状态
+  error?: string;            // 错误信息
+}
+
+/**
+ * 文本差异项
+ */
+export interface TextDiff {
+  type: 'insert' | 'delete' | 'equal'; // 差异类型
+  value: string;                       // 差异值
+  position: number;                    // 在原文中的位置
+}
+
+/**
+ * AI编辑历史记录
+ */
+export interface AIEditHistory {
+  id: string;
+  chapterId: string;
+  novelId: string;
+  actionType: EditorAIActionType;
+  originalContent: string;
+  modifiedContent: string;
+  appliedContent?: string;  // 最终应用的内容
+  timestamp: number;
+  userId?: string;
+  status: 'applied' | 'rejected' | 'modified';
+} 
