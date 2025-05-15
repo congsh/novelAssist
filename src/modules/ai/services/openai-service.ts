@@ -38,6 +38,7 @@ export class OpenAIService implements AIBaseService {
       this.client = new OpenAI({
         apiKey: settings.apiKey,
         baseURL: settings.baseUrl || undefined,
+        dangerouslyAllowBrowser: true,
       });
       
       this.settings = settings;
@@ -129,7 +130,7 @@ export class OpenAIService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
       }, options);
       
       const assistantMessage: ChatMessage = {
@@ -188,7 +189,7 @@ export class OpenAIService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
         stream: true,
       }, options);
       

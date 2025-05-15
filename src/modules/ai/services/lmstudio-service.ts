@@ -37,6 +37,7 @@ export class LMStudioService implements AIBaseService {
       this.client = new OpenAI({
         apiKey: 'lm-studio', // LMStudio不需要实际的API密钥，但OpenAI客户端需要一个非空字符串
         baseURL: baseUrl,
+        dangerouslyAllowBrowser: true, // 允许在浏览器环境中使用
       });
       
       this.settings = settings;
@@ -103,7 +104,7 @@ export class LMStudioService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
       });
       
       const assistantMessage: ChatMessage = {
@@ -155,7 +156,7 @@ export class LMStudioService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
         stream: true,
       });
       

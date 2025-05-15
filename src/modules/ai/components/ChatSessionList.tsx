@@ -64,13 +64,17 @@ const ChatSessionList: React.FC<ChatSessionListProps> = ({
       cancelText: '取消',
       onOk: async () => {
         try {
+          const isCurrentSession = currentSessionId === session.id;
           await chatService.deleteSession(session.id);
           message.success('会话已删除');
-          onSessionsUpdate();
           
           // 如果删除的是当前会话，创建一个新会话
-          if (currentSessionId === session.id) {
-            onSessionCreate();
+          if (isCurrentSession) {
+            // 先更新会话列表，然后再创建新会话，避免重复创建
+            onSessionsUpdate();
+          } else {
+            // 否则只更新会话列表
+            onSessionsUpdate();
           }
         } catch (error) {
           console.error('删除会话失败:', error);
@@ -118,31 +122,29 @@ const ChatSessionList: React.FC<ChatSessionListProps> = ({
             onClick={() => onSessionSelect(session.id)}
             actions={[
               <Dropdown 
-                overlay={
-                  <Menu>
-                    <Menu.Item 
-                      key="rename" 
-                      icon={<EditOutlined />}
-                      onClick={(e) => {
+                menu={{
+                  items: [
+                    {
+                      key: "rename",
+                      icon: <EditOutlined />,
+                      label: "重命名",
+                      onClick: (e) => {
                         e.domEvent.stopPropagation();
                         handleRename(session);
-                      }}
-                    >
-                      重命名
-                    </Menu.Item>
-                    <Menu.Item 
-                      key="delete" 
-                      icon={<DeleteOutlined />}
-                      danger
-                      onClick={(e) => {
+                      }
+                    },
+                    {
+                      key: "delete",
+                      icon: <DeleteOutlined />,
+                      label: "删除",
+                      danger: true,
+                      onClick: (e) => {
                         e.domEvent.stopPropagation();
                         handleDelete(session);
-                      }}
-                    >
-                      删除
-                    </Menu.Item>
-                  </Menu>
-                }
+                      }
+                    }
+                  ]
+                }}
                 trigger={['click']}
               >
                 <Button 

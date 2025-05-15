@@ -29,8 +29,8 @@ function createWindow() {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           process.env.NODE_ENV === 'development'
-            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 http://localhost:3000; img-src 'self' data: http://localhost:3000"
-            : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+            ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 http://localhost:3000 https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data: http://localhost:3000"
+            : "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data:"
         ]
       }
     });

@@ -2,7 +2,7 @@
 
 本文件记录小说辅助创作工具项目的所有重要变更。
 
-## [未发布]
+## [Unreleased]
 
 ### 新增
 - 创建项目设计文档
@@ -76,7 +76,8 @@
   - 添加提示词分类和标签功能，方便用户组织和查找提示词
   - 实现AI响应流式传输，提供更好的用户体验
   - 添加取消生成功能，允许用户中断长时间的AI生成
-  - 优化AI聊天界面，添加会话列表侧边栏
+  - 添加会话管理侧边栏，方便切换不同的聊天会话
+  - 添加取消生成按钮，提高用户控制能力
 
 ### 修改
 - 更新ToolsPage组件，将人物管理从"开发中"状态更改为"已完成"状态
@@ -119,44 +120,15 @@
   - 添加取消生成按钮，提高用户控制能力
 
 ### 修复
-- 修复依赖安装过程中的网络连接问题
-- 解决证书验证错误
-- 修复contextBridge API使用问题
-- 解决开发环境下的CSP限制问题
-- 修复webpack-dev-server的WebSocket连接问题
-- 修复CSP配置不一致导致的unsafe-eval错误
-- 修复缺失的编辑器依赖问题
-- 修复NovelDetail组件中的中文引号问题
-- 修复window.electron类型定义缺失问题
-- 修复HTML页面为空的问题，调整CSP配置允许unsafe-eval
-- 修复React应用不加载的问题，添加加载提示
-- 修复数据库表不存在错误，实现表结构检查和自动创建
-- 修复数据库查询前未等待初始化完成的问题
-- 修复大纲树形结构的递归删除问题
-- 修复webpack构建错误，添加Node.js核心模块的polyfill
-- 修复服务层中直接导入electron模块的问题，改用window.electron
-- 修复"Error invoking remote method"错误，添加缺失的IPC处理器导入
-- 修复大纲创建时的SQL参数错误（SQLITE_RANGE: column index out of range），优化参数处理逻辑
-- 修复timeline_events表结构问题，添加缺失的importance列，并将related_characters和related_locations列名更新为character_ids和location_id
-- 修复updateTimelineEventsTable方法中的回调函数处理，确保在表结构更新后正确调用createIndexes并传递回调
-- 修复数据库中缺少novel_tags表的问题，添加表结构检查和创建逻辑
-- 修复NovelDetail组件中对可能为undefined的属性的访问问题
-- 修复 Ant Design 的 message 组件动态主题警告，使用 App 组件包装相关组件
-- 修复大纲关联功能中的类型错误，确保正确处理大纲的树状结构
-- 修复解除大纲和时间线关联时的NOT NULL约束错误，使用临时ID替代null值
-- 修复大纲和时间线解除关联时的错误处理和消息提示
-- 修复关联到小说的大纲和时间线在原模块中消失的问题，改为使用relationships表存储关联关系
-- 修复大纲的父子关系不正确问题，确保子节点随父节点正确绑定到小说
-- 修复OutlineList组件中的数据加载逻辑，显示所有大纲而非仅关联到当前小说的大纲
-- 修复TimelineList组件中的数据加载逻辑，显示所有时间线事件
-- 修复novel-association-handler.js中的查询逻辑，使用JOIN查询relationships表获取关联数据
-- 修复统计分析功能中的DbManager导入错误，将DbManager作为实例对象使用而非构造函数
-- 修复AI服务导出问题，确保aiServiceManager能被正确导入和使用
-- 修复AI聊天会话管理中的状态更新问题，确保会话列表正确刷新
-- 修复AI服务中直接导入Electron模块的问题，改用window.electron API
-- 创建全局Electron API类型定义，确保类型安全性和一致性
-- 修复"fs.existsSync is not a function"错误，解决渲染进程中Node.js模块导入问题
-- 修复"Error: No handler registered for 'ai:load-settings'"错误，添加AI IPC处理器的初始化调用
+- 修复"Refused to connect because it violates the document's Content Security Policy"错误，更新CSP配置允许连接到AI服务API
+- 优化OpenAI Compatible服务，避免请求模型列表，解决CSP限制问题
+- 修复删除对话后创建多个空对话的问题，优化会话管理逻辑
+- 修复Ant Design过时API警告，包括Tabs.TabPane和Dropdown.overlay
+- 增强CSP配置，允许所有HTTPS连接，彻底解决API连接问题
+- 改进OpenAI Compatible服务的URL处理和连接测试逻辑，提高健壮性
+- 修复AI服务中"Range of max_tokens should be [1, 8192]"的错误，通过确保max_tokens参数值在有效范围内
+- 修复空对话发送消息时产生两条相同语句的问题
+- 修复"It looks like you're running in a browser-like environment"错误，在OpenAI客户端配置中添加dangerouslyAllowBrowser选项
 - 优化AI助手页面，当检测到缺少API密钥时自动跳转到AI设置页面
 
 ### 删除

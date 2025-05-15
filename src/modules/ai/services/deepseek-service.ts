@@ -41,6 +41,7 @@ export class DeepSeekService implements AIBaseService {
       this.client = new OpenAI({
         apiKey: settings.apiKey,
         baseURL: baseUrl,
+        dangerouslyAllowBrowser: true,
       });
       
       this.settings = settings;
@@ -96,7 +97,7 @@ export class DeepSeekService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
       });
       
       const assistantMessage: ChatMessage = {
@@ -148,7 +149,7 @@ export class DeepSeekService implements AIBaseService {
           content: msg.content,
         })),
         temperature: temperature,
-        max_tokens: maxTokens,
+        max_tokens: Math.min(Math.max(maxTokens || 1000, 1), 8192),
         stream: true,
       });
       
