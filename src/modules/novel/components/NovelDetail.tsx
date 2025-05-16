@@ -1672,6 +1672,15 @@ const NovelDetail: React.FC = () => {
         </div>
       ),
     },
+    {
+      key: 'statistics',
+      label: '统计分析',
+      children: (
+        <div className="novel-statistics" style={{ padding: '20px' }}>
+          {renderStatistics()}
+        </div>
+      ),
+    },
   ];
 
   // 返回加载中状态
@@ -1754,7 +1763,7 @@ const NovelDetail: React.FC = () => {
               ],
             }}
           >
-            <Button loading={exportLoading} icon={<ExportOutlined />}>
+            <Button loading={exportLoading} icon={<ExportOutlined />} style={{ marginRight: 8 }}>
               导出 <DownOutlined />
             </Button>
           </Dropdown>
@@ -1770,8 +1779,17 @@ const NovelDetail: React.FC = () => {
           <Button 
             icon={<TagOutlined />} 
             onClick={showTagModal}
+            style={{ marginRight: 8 }}
           >
             管理标签
+          </Button>
+          
+          <Button 
+            icon={<CloudUploadOutlined />} 
+            onClick={handleCreateBackup}
+            loading={backupLoading}
+          >
+            备份小说
           </Button>
         </div>
         
