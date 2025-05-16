@@ -3,6 +3,7 @@ const path = require('path');
 const url = require('url');
 const fs = require('fs');
 const logger = require('./utils/logger');
+const isDev = process.env.NODE_ENV === 'development';
 
 // 设置控制台编码为UTF-8
 process.env.LANG = 'zh_CN.UTF-8';
@@ -277,4 +278,92 @@ function setupMenu() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
   logger.info('应用菜单已设置');
-} 
+}
+
+// 获取数据库路径
+function getDatabasePath() {
+  // 如果是开发环境，使用项目根目录下的dev_data目录
+  if (isDev) {
+    const devDataPath = path.join(__dirname, '..', '..', 'dev_data');
+    if (!fs.existsSync(devDataPath)) {
+      fs.mkdirSync(devDataPath, { recursive: true });
+    }
+    return path.join(devDataPath, 'novelassist.db');
+  }
+  
+  // 如果是生产环境，尝试读取app-paths.txt文件获取路径
+  const appPathsFile = path.join(app.getAppPath(), 'app-paths.txt');
+  let dataPath = '';
+  
+  if (fs.existsSync(appPathsFile)) {
+    try {
+      const content = fs.readFileSync(appPathsFile, 'utf8');
+      const match = content.match(/DATA_PATH=(.+)(\r?\n|$)/);
+      if (match && match[1]) {
+        dataPath = match[1].trim();
+      }
+    } catch (error) {
+      logger.error('读取app-paths.txt失败:', error);
+    }
+  }
+  
+  // 如果读取失败，使用默认路径
+  if (!dataPath) {
+    dataPath = path.join(app.getPath('userData'), 'data');
+  }
+  
+  if (!fs.existsSync(dataPath)) {
+    fs.mkdirSync(dataPath, { recursive: true });
+  }
+  
+  return path.join(dataPath, 'novelassist.db');
+}
+
+// 获取配置路径
+function getConfigPath() {
+  // 如果是开发环境，使用项目根目录下的dev_config目录
+  if (isDev) {
+    const devConfigPath = path.join(__dirname, '..', '..', 'dev_config');
+    if (!fs.existsSync(devConfigPath)) {
+      fs.mkdirSync(devConfigPath, { recursive: true });
+    }
+    return devConfigPath;
+  }
+  
+  // 如果是生产环境，尝试读取app-paths.txt文件获取路径
+  const appPathsFile = path.join(app.getAppPath(), 'app-paths.txt');
+  let configPath = '';
+  
+  if (fs.existsSync(appPathsFile)) {
+    try {
+      const content = fs.readFileSync(appPathsFile, 'utf8');
+      const match = content.match(/CONFIG_PATH=(.+)(\r?\n|$)/);
+      if (match && match[1]) {
+        configPath = match[1].trim();
+      }
+    } catch (error) {
+      logger.error('读取app-paths.txt失败:', error);
+    }
+  }
+  
+  // 如果读取失败，使用默认路径
+  if (!configPath) {
+    configPath = path.join(app.getPath('userData'), 'config');
+  }
+  
+  if (!fs.existsSync(configPath)) {
+    fs.mkdirSync(configPath, { recursive: true });
+  }
+  
+  return configPath;
+}
+
+// 导出路径函数，供其他模块使用
+module.exports = {
+  getDatabasePath,
+  getConfigPath
+};
+
+// 在初始化数据库时使用这些路径
+// 例如: const dbPath = getDatabasePath();
+// const db = new sqlite3.Database(dbPath); 

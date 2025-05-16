@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景圆圈 -->
+  <circle cx="32" cy="32" r="32" fill="#4A90E2" />
+  <!-- 笔尖形状 -->
+  <path d="M32,16 L24,24 L24,42 L32,52 L40,42 L40,24 Z" fill="#FFFFFF" />
+  <!-- 笔尖中心圆孔 -->
+  <circle cx="32" cy="32" r="4" fill="#4A90E2" />
+</svg> 

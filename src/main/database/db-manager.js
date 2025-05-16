@@ -2,6 +2,7 @@ const sqlite3 = require('sqlite3').verbose();
 const path = require('path');
 const fs = require('fs');
 const { app } = require('electron');
+const { getDatabasePath } = require('../main');
 
 /**
  * 数据库管理器类
@@ -10,7 +11,7 @@ const { app } = require('electron');
 class DbManager {
   constructor() {
     this.db = null;
-    this.dbPath = path.join(app.getPath('userData'), 'novelassist.db');
+    this.dbPath = getDatabasePath();
     this.isInitialized = false;
     this.init();
   }
@@ -33,7 +34,7 @@ class DbManager {
         console.error('数据库连接失败:', err.message);
         return;
       }
-      console.log('已连接到SQLite数据库');
+      console.log('已连接到SQLite数据库，路径:', this.dbPath);
       
       // 如果数据库文件不存在，创建表结构
       if (!dbExists) {
