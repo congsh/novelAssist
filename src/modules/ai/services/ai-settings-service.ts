@@ -43,7 +43,7 @@ const defaultAISettings: AISettings = {
   providers: [
     {
       id: 'default-openai',
-      name: 'OpenAI',
+      name: 'OpenAI (请设置API密钥)',
       type: AIProviderType.OPENAI,
       apiKey: '',
       defaultModel: 'gpt-3.5-turbo',
@@ -69,6 +69,7 @@ const ACTIVE_PROVIDER_ID_KEY = 'ai:active-provider-id';
  */
 export class AISettingsService {
   private static instance: AISettingsService;
+  private isProductionBuild: boolean;
   
   /**
    * 获取单例实例
@@ -80,7 +81,15 @@ export class AISettingsService {
     return AISettingsService.instance;
   }
   
-  private constructor() {}
+  private constructor() {
+    // 确定是否是生产构建
+    this.isProductionBuild = process.env.NODE_ENV === 'production';
+    
+    // 如果是生产构建，记录日志
+    if (this.isProductionBuild) {
+      console.log('AI设置服务运行在生产环境模式');
+    }
+  }
   
   /**
    * 保存AI设置
@@ -114,17 +123,23 @@ export class AISettingsService {
     try {
       // 尝试从新结构加载
       const settings = await window.electron.invoke('settings:get', { key: SETTINGS_KEY });
+      
       if (settings) {
         return settings;
       }
       
       // 加载各部分
       const activeProviderId = await window.electron.invoke('settings:get', { key: ACTIVE_PROVIDER_ID_KEY }) || 'default-openai';
-      const providers = await window.electron.invoke('settings:get', { key: PROVIDERS_KEY }) || defaultAISettings.providers;
+      const providers = await window.electron.invoke('settings:get', { key: PROVIDERS_KEY }) || [];
       const models = await window.electron.invoke('settings:get', { key: MODELS_KEY }) || [];
       
-      // 如果没有提供商，使用默认提供商
-      if (!providers || providers.length === 0) {
+      // 如果没有提供商或是生产构建的首次运行，使用默认提供商（不带API密钥）
+      if (!providers || providers.length === 0 || this.isProductionBuild) {
+        // 确保生产构建使用默认设置，不包含任何测试环境的API密钥
+        if (this.isProductionBuild) {
+          console.log('生产环境：使用默认AI设置，需要用户自行设置API密钥');
+          return defaultAISettings;
+        }
         return defaultAISettings;
       }
       
