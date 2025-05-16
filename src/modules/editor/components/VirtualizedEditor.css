@@ -1,0 +1,75 @@
+.virtualized-editor-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid #d9d9d9;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+.virtualized-editor-content {
+  flex: 1;
+  overflow: auto;
+  padding: 0 20px;
+  position: relative;
+}
+
+.virtual-editor-block {
+  padding: 4px 0;
+  cursor: text;
+  position: relative;
+  line-height: 1.6;
+}
+
+.virtual-editor-block:hover {
+  background-color: #f5f5f5;
+}
+
+.virtual-editor-block.is-focused {
+  background-color: #e6f7ff;
+}
+
+.virtual-editor-block-content {
+  min-height: 18px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.virtual-editor-block-scrolling {
+  padding: 4px 0;
+  background-color: #fafafa;
+  opacity: 0.9;
+}
+
+.virtual-editor-block-content-scrolling {
+  color: #505050;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.virtual-editor-placeholder {
+  color: #bfbfbf;
+  font-style: italic;
+}
+
+/* 滚动条样式优化 */
+.virtualized-editor-content::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.virtualized-editor-content::-webkit-scrollbar-thumb {
+  background-color: #d9d9d9;
+  border-radius: 3px;
+}
+
+.virtualized-editor-content::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.virtualized-editor-content::-webkit-scrollbar-corner {
+  background-color: transparent;
+} 

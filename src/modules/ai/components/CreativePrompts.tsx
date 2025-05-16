@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Tag, Input, Modal, Form, Select, message, Tooltip } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, SaveOutlined } from '@ant-design/icons';
+import { Card, Button, Tag, Input, Modal, Form, Select, message, Tooltip, Empty, Row, Col, Divider, Space, Typography } from 'antd';
+import { PlusOutlined, EditOutlined, DeleteOutlined, SaveOutlined, SearchOutlined, CopyOutlined, SendOutlined, FilterOutlined, InfoCircleOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
 import { CreativePrompt } from '../types';
 
 const { TextArea } = Input;
 const { Option } = Select;
+const { Search } = Input;
+const { Text, Title } = Typography;
 
 interface CreativePromptsProps {
   onUsePrompt: (promptText: string) => void;
 }
 
 /**
- * 创作提示词组件
+ * 创作提示词组件 - 增强版
+ * 提供创作提示词的管理、搜索和使用功能
  */
 const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
   const [prompts, setPrompts] = useState<CreativePrompt[]>([]);
@@ -20,6 +23,9 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
   const [editingPrompt, setEditingPrompt] = useState<CreativePrompt | null>(null);
   const [form] = Form.useForm();
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [searchText, setSearchText] = useState<string>('');
+  const [filterVisible, setFilterVisible] = useState(false);
   
   // 预设的提示词分类
   const categories = [
@@ -176,120 +182,329 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
     });
     setModalVisible(true);
   };
+
+  // 复制提示词到剪贴板
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(
+      () => {
+        message.success('已复制到剪贴板');
+      },
+      () => {
+        message.error('复制失败');
+      }
+    );
+  };
+  
+  // 切换标签筛选
+  const toggleTagFilter = (tag: string) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag) 
+        : [...prev, tag]
+    );
+  };
+  
+  // 清除所有筛选条件
+  const clearAllFilters = () => {
+    setSelectedCategory(null);
+    setSelectedTags([]);
+    setSearchText('');
+    setFilterVisible(false);
+  };
   
   // 过滤提示词
-  const filteredPrompts = selectedCategory
-    ? prompts.filter(p => p.category === selectedCategory)
-    : prompts;
+  const getFilteredPrompts = () => {
+    let filtered = prompts;
+    
+    // 按分类过滤
+    if (selectedCategory) {
+      filtered = filtered.filter(p => p.category === selectedCategory);
+    }
+    
+    // 按标签过滤
+    if (selectedTags.length > 0) {
+      filtered = filtered.filter(p => 
+        selectedTags.some(tag => p.tags.includes(tag))
+      );
+    }
+    
+    // 按搜索文本过滤
+    if (searchText) {
+      const lowerSearch = searchText.toLowerCase();
+      filtered = filtered.filter(p => 
+        p.title.toLowerCase().includes(lowerSearch) || 
+        p.content.toLowerCase().includes(lowerSearch) ||
+        p.tags.some(tag => tag.toLowerCase().includes(lowerSearch))
+      );
+    }
+    
+    return filtered;
+  };
   
-  return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ marginBottom: 16 }}>
+  const filteredPrompts = getFilteredPrompts();
+  
+  // 获取所有标签及其使用次数
+  const getTagCounts = () => {
+    const tagCounts: Record<string, number> = {};
+    prompts.forEach(prompt => {
+      prompt.tags.forEach(tag => {
+        tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+      });
+    });
+    return tagCounts;
+  };
+  
+  const tagCounts = getTagCounts();
+  
+  // 渲染提示词卡片
+  const renderPromptCard = (prompt: CreativePrompt) => (
+    <Card 
+      key={prompt.id}
+      size="small"
+      title={
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Select
-            style={{ width: 200 }}
-            placeholder="选择分类"
-            allowClear
-            onChange={value => setSelectedCategory(value)}
+          <Tooltip title={prompt.title}>
+            <span style={{ 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis', 
+              whiteSpace: 'nowrap',
+              maxWidth: '200px'
+            }}>
+              {prompt.title}
+            </span>
+          </Tooltip>
+          <Tag color="blue">{prompt.category}</Tag>
+        </div>
+      }
+      style={{ 
+        marginBottom: 16, 
+        boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        borderRadius: '8px',
+        transition: 'all 0.3s'
+      }}
+      hoverable
+      actions={[
+        <Tooltip title="复制">
+          <CopyOutlined key="copy" onClick={() => copyToClipboard(prompt.content)} />
+        </Tooltip>,
+        <Tooltip title="使用">
+          <SendOutlined key="use" onClick={() => onUsePrompt(prompt.content)} />
+        </Tooltip>,
+        <Tooltip title="编辑">
+          <EditOutlined key="edit" onClick={() => showEditModal(prompt)} />
+        </Tooltip>,
+        <Tooltip title="删除">
+          <DeleteOutlined key="delete" onClick={() => handleDeletePrompt(prompt)} />
+        </Tooltip>
+      ]}
+    >
+      <div style={{ marginBottom: 12 }}>
+        <div>
+          {prompt.tags.map(tag => (
+            <Tag 
+              key={tag} 
+              color="processing" 
+              style={{ marginBottom: 4, cursor: 'pointer' }}
+              onClick={() => toggleTagFilter(tag)}
           >
-            {categories.map(category => (
-              <Option key={category} value={category}>{category}</Option>
-            ))}
-          </Select>
-          
-          <Button 
-            type="primary" 
-            icon={<PlusOutlined />} 
-            onClick={showAddModal}
-          >
-            添加提示词
-          </Button>
+              {tag}
+            </Tag>
+          ))}
         </div>
       </div>
       
-      <div style={{ flex: 1, overflow: 'auto' }}>
-        {filteredPrompts.map(prompt => (
+      <div style={{ 
+        height: 80, 
+        overflow: 'hidden', 
+        textOverflow: 'ellipsis', 
+        marginBottom: 12,
+        fontSize: 13,
+        color: '#595959',
+        whiteSpace: 'pre-wrap',
+        position: 'relative'
+      }}>
+        <Text style={{ wordBreak: 'break-word' }}>
+          {prompt.content}
+        </Text>
+        <div style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          right: 0,
+          height: '30px',
+          background: 'linear-gradient(transparent, white)'
+        }} />
+      </div>
+    </Card>
+  );
+  
+  // 渲染筛选器
+  const renderFilters = () => (
           <Card 
-            key={prompt.id}
             size="small"
-            style={{ marginBottom: 8 }}
-            title={prompt.title}
-            extra={
-              <div>
-                <Tooltip title="编辑">
-                  <Button 
-                    type="text" 
-                    icon={<EditOutlined />} 
-                    onClick={() => showEditModal(prompt)}
-                    style={{ marginRight: 8 }}
-                  />
-                </Tooltip>
-                <Tooltip title="删除">
-                  <Button 
-                    type="text" 
-                    danger
-                    icon={<DeleteOutlined />} 
-                    onClick={() => handleDeletePrompt(prompt)}
-                  />
-                </Tooltip>
+      title={
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>高级筛选</span>
+          <Button type="link" onClick={clearAllFilters} size="small">
+            清除筛选
+          </Button>
               </div>
             }
+      style={{ marginBottom: 16, display: filterVisible ? 'block' : 'none' }}
           >
+      <div style={{ marginBottom: 12 }}>
             <div style={{ marginBottom: 8 }}>
-              <div style={{ color: '#666', marginBottom: 8 }}>
-                分类: <Tag color="blue">{prompt.category}</Tag>
+          <Text strong>分类</Text>
               </div>
               <div>
-                {prompt.tags.map(tag => (
-                  <Tag key={tag}>{tag}</Tag>
+          {categories.map(category => (
+            <Tag 
+              key={category}
+              color={selectedCategory === category ? 'blue' : 'default'}
+              style={{ marginBottom: 8, cursor: 'pointer' }}
+              onClick={() => setSelectedCategory(prev => prev === category ? null : category)}
+            >
+              {category}
+            </Tag>
                 ))}
               </div>
             </div>
             
-            <div style={{ marginTop: 16 }}>
+      <div>
+        <div style={{ marginBottom: 8 }}>
+          <Text strong>标签</Text>
+        </div>
+        <div>
+          {Object.entries(tagCounts).map(([tag, count]) => (
+            <Tag 
+              key={tag}
+              color={selectedTags.includes(tag) ? 'processing' : 'default'}
+              style={{ marginBottom: 8, cursor: 'pointer' }}
+              onClick={() => toggleTagFilter(tag)}
+            >
+              {tag} ({count})
+            </Tag>
+          ))}
+        </div>
+      </div>
+    </Card>
+  );
+  
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', padding: '0 8px' }}>
+      <div style={{ marginBottom: 16 }}>
+        <Row gutter={[16, 16]} align="middle">
+          <Col xs={24} md={16}>
+            <Search
+              placeholder="搜索提示词..."
+              allowClear
+              enterButton
+              onSearch={value => setSearchText(value)}
+              onChange={e => setSearchText(e.target.value)}
+              style={{ width: '100%' }}
+            />
+          </Col>
+          <Col xs={12} md={4}>
+            <Button 
+              icon={<FilterOutlined />} 
+              onClick={() => setFilterVisible(!filterVisible)}
+              style={{ width: '100%' }}
+              type={filterVisible ? 'primary' : 'default'}
+            >
+              筛选
+            </Button>
+          </Col>
+          <Col xs={12} md={4}>
               <Button 
                 type="primary" 
-                onClick={() => onUsePrompt(prompt.content)}
+              icon={<PlusOutlined />} 
+              onClick={showAddModal}
+              style={{ width: '100%' }}
               >
-                使用此提示词
+              添加
               </Button>
+          </Col>
+        </Row>
             </div>
-          </Card>
+      
+      {renderFilters()}
+      
+      <div style={{ 
+        flex: 1, 
+        overflow: 'auto', 
+        paddingRight: 4 
+      }}>
+        {filteredPrompts.length > 0 ? (
+          <Row gutter={[16, 16]}>
+            {filteredPrompts.map(prompt => (
+              <Col xs={24} sm={12} md={8} lg={8} xl={6} key={prompt.id}>
+                {renderPromptCard(prompt)}
+              </Col>
         ))}
+          </Row>
+        ) : (
+          <Empty 
+            description={
+              <span>
+                {searchText || selectedCategory || selectedTags.length > 0 
+                  ? "没有找到匹配的提示词" 
+                  : "暂无提示词"}
+              </span>
+            }
+            style={{ margin: '40px 0' }}
+          >
+            <Button type="primary" onClick={showAddModal} icon={<PlusOutlined />}>
+              添加提示词
+            </Button>
+          </Empty>
+        )}
       </div>
       
       <Modal
-        title={editingPrompt ? '编辑提示词' : '添加提示词'}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center' }}>
+            <span>{editingPrompt ? '编辑提示词' : '添加提示词'}</span>
+            <Tooltip title="提示词可以包含[占位符]，用于标记需要替换的内容">
+              <InfoCircleOutlined style={{ marginLeft: 8 }} />
+            </Tooltip>
+          </div>
+        }
         open={modalVisible}
         onOk={handleAddOrEditPrompt}
-        onCancel={() => {
-          setModalVisible(false);
-          setEditingPrompt(null);
-        }}
+        onCancel={() => setModalVisible(false)}
         okText={editingPrompt ? '保存' : '添加'}
         cancelText="取消"
+        destroyOnClose
         width={600}
       >
-        <Form form={form} layout="vertical">
+        <Form
+          form={form}
+          layout="vertical"
+        >
           <Form.Item
             name="title"
             label="标题"
             rules={[{ required: true, message: '请输入提示词标题' }]}
           >
-            <Input placeholder="输入提示词标题" />
+            <Input placeholder="输入提示词标题" maxLength={50} />
           </Form.Item>
           
           <Form.Item
             name="content"
             label="内容"
             rules={[{ required: true, message: '请输入提示词内容' }]}
+            tooltip="可以使用[占位符]表示需要替换的内容"
           >
             <TextArea 
-              placeholder="输入提示词内容" 
-              autoSize={{ minRows: 4, maxRows: 8 }}
+              placeholder="输入提示词内容，可以使用[占位符]表示需要替换的内容" 
+              rows={8}
+              showCount
+              maxLength={1000}
             />
           </Form.Item>
           
+          <Row gutter={16}>
+            <Col span={12}>
           <Form.Item
             name="category"
             label="分类"
@@ -301,7 +516,9 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
               ))}
             </Select>
           </Form.Item>
+            </Col>
           
+            <Col span={12}>
           <Form.Item
             name="tags"
             label="标签"
@@ -310,6 +527,7 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
             <Select 
               mode="multiple" 
               placeholder="选择标签" 
+                  style={{ width: '100%' }}
               allowClear
             >
               {allTags.map(tag => (
@@ -317,6 +535,8 @@ const CreativePrompts: React.FC<CreativePromptsProps> = ({ onUsePrompt }) => {
               ))}
             </Select>
           </Form.Item>
+            </Col>
+          </Row>
         </Form>
       </Modal>
     </div>

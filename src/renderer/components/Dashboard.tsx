@@ -30,10 +30,8 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        console.log('正在调用get-novels...');
         // 获取小说列表
         const novelsResponse = await window.electron.invoke('get-novels');
-        console.log('get-novels响应:', novelsResponse);
         
         if (novelsResponse.success) {
           const novels = novelsResponse.data;
@@ -41,13 +39,58 @@ const Dashboard: React.FC = () => {
           
           // 计算统计数据
           const totalNovels = novels.length;
-          const totalWords = novels.reduce((sum: number, novel: Novel) => sum + (novel.word_count || 0), 0);
+          
+          // 获取写作活动数据，用于计算今日字数
+          const activityResponse = await window.electron.invoke('get-writing-activity');
+          let todayWords = 0;
+          let totalWords = 0;
+          
+          if (activityResponse.success) {
+            const activityData = activityResponse.data;
+            // 获取今天的数据
+            const today = new Date().toISOString().split('T')[0];
+            const todayData = activityData.find((item: any) => item.date === today);
+            todayWords = todayData ? todayData.wordCount : 0;
+            
+            // 获取总字数（从章节统计，更准确）
+            const statsResponse = await window.electron.invoke('get-novels-statistics');
+            if (statsResponse.success) {
+              totalWords = statsResponse.data.reduce(
+                (sum: number, novel: any) => sum + (novel.currentWordCount || 0), 
+                0
+              );
+            } else {
+              // 如果获取失败，使用小说表中的字数（可能不准确）
+              totalWords = novels.reduce(
+                (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
+                0
+              );
+            }
+          } else {
+            // 如果获取失败，使用小说表中的字数
+            totalWords = novels.reduce(
+              (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
+              0
+            );
+          }
+          
+          // 获取写作时间（如果有相关API）
+          let writingTime = 0;
+          try {
+            const timeResponse = await window.electron.invoke('get-writing-time');
+            if (timeResponse.success) {
+              writingTime = timeResponse.data.totalMinutes || 0;
+            }
+          } catch (error) {
+            console.log('获取写作时间功能未实现');
+            writingTime = 0;
+          }
           
           setStats({
             totalNovels,
             totalWords,
-            todayWords: 0, // 暂时没有实现统计今日字数
-            writingTime: 0 // 暂时没有实现统计写作时间
+            todayWords,
+            writingTime
           });
         } else {
           console.error('获取小说列表失败:', novelsResponse.error);

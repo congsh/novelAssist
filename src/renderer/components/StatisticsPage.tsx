@@ -79,7 +79,7 @@ const StatisticsPage: React.FC = () => {
   const loadStatistics = async () => {
     setLoading(true);
     try {
-      // 加载总体统计
+      // 获取总体统计
       const overallResult = await window.electron.invoke('get-overall-statistics');
       if (overallResult.success) {
         setOverallStats(overallResult.data);
@@ -88,7 +88,7 @@ const StatisticsPage: React.FC = () => {
       }
       
       // 加载小说进度
-      const progressResult = await window.electron.invoke('get-novel-progress');
+      const progressResult = await window.electron.invoke('get-novels-statistics');
       if (progressResult.success) {
         setNovelProgress(progressResult.data);
         
@@ -363,6 +363,53 @@ const StatisticsPage: React.FC = () => {
     );
   };
 
+  // 定义Tab项
+  const tabItems = [
+    {
+      key: '1',
+      label: '小说进度',
+      children: (
+        <Card>
+          {renderNovelProgressTable()}
+        </Card>
+      )
+    },
+    {
+      key: '2',
+      label: '写作活动',
+      children: (
+        <Card title="近30天写作活动">
+          <div style={{ height: 300 }}>
+            {renderActivityChart()}
+          </div>
+        </Card>
+      )
+    },
+    {
+      key: '3',
+      label: '小说详情',
+      children: (
+        <Card 
+          title="小说详细统计" 
+          extra={
+            <Select
+              style={{ width: 200 }}
+              placeholder="选择小说"
+              value={selectedNovelId}
+              onChange={handleNovelChange}
+            >
+              {novelProgress.map(novel => (
+                <Option key={novel.id} value={novel.id}>{novel.title}</Option>
+              ))}
+            </Select>
+          }
+        >
+          {renderNovelDetailStats()}
+        </Card>
+      )
+    }
+  ];
+
   return (
     <div>
       <Title level={2}>统计分析</Title>
@@ -371,41 +418,7 @@ const StatisticsPage: React.FC = () => {
       <Spin spinning={loading}>
         {renderOverallStats()}
         
-        <Tabs defaultActiveKey="1" style={{ marginTop: 16 }}>
-          <TabPane tab="小说进度" key="1">
-            <Card>
-              {renderNovelProgressTable()}
-            </Card>
-          </TabPane>
-          
-          <TabPane tab="写作活动" key="2">
-            <Card title="近30天写作活动">
-              <div style={{ height: 300 }}>
-                {renderActivityChart()}
-              </div>
-            </Card>
-          </TabPane>
-          
-          <TabPane tab="小说详情" key="3">
-            <Card 
-              title="小说详细统计" 
-              extra={
-                <Select
-                  style={{ width: 200 }}
-                  placeholder="选择小说"
-                  value={selectedNovelId}
-                  onChange={handleNovelChange}
-                >
-                  {novelProgress.map(novel => (
-                    <Option key={novel.id} value={novel.id}>{novel.title}</Option>
-                  ))}
-                </Select>
-              }
-            >
-              {renderNovelDetailStats()}
-            </Card>
-          </TabPane>
-        </Tabs>
+        <Tabs defaultActiveKey="1" style={{ marginTop: 16 }} items={tabItems} />
       </Spin>
     </div>
   );

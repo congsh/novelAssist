@@ -9,6 +9,8 @@ import {
 } from '../types';
 import { aiServiceManager } from './index';
 import { AISettingsService } from './ai-settings-service';
+import { aiRequestQueue, AIRequest } from './ai-request-queue';
+import { chatContextManager } from './chat-context-manager';
 
 /**
  * 聊天服务
@@ -44,6 +46,16 @@ export class ChatService {
     try {
       const settings = await this.aiSettingsService.loadSettings();
       const result = await aiServiceManager.initialize(settings);
+      
+      // 设置上下文管理器的最大token数
+      if (settings.activeProviderId && settings.providers) {
+        const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+        if (activeProvider && activeProvider.maxTokens) {
+          // 为上下文保留75%的token
+          chatContextManager.setMaxTokens(Math.floor(activeProvider.maxTokens * 0.75));
+        }
+      }
+      
       return result;
     } catch (error) {
       console.error('初始化聊天服务失败:', error);
@@ -58,6 +70,11 @@ export class ChatService {
    */
   async createNewSession(title: string = '新对话', novelId?: string): Promise<ChatSession> {
     const settings = await this.aiSettingsService.loadSettings();
+    const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+    
+    if (!activeProvider) {
+      throw new Error('找不到活动的AI提供商');
+    }
     
     const session: ChatSession = {
       id: uuidv4(),
@@ -65,7 +82,8 @@ export class ChatService {
       messages: [],
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      modelId: settings.defaultModel,
+      modelId: activeProvider.defaultModel,
+      providerId: settings.activeProviderId,
       novelId
     };
     
@@ -231,13 +249,22 @@ export class ChatService {
     await this.addUserMessage(content);
     
     const settings = await this.aiSettingsService.loadSettings();
+    const activeProvider = settings.providers.find(p => p.id === this.currentSession!.providerId || settings.activeProviderId);
+    
+    if (!activeProvider) {
+      throw new Error('找不到活动的AI提供商');
+    }
+    
+    // 压缩历史消息以优化token使用
+    const compressedMessages = chatContextManager.compressHistory([...this.currentSession!.messages]);
     
     // 创建请求
     const request: ChatCompletionRequest = {
-      modelId: this.currentSession!.modelId || settings.defaultModel,
-      messages: this.currentSession!.messages,
-      temperature: settings.temperature,
-      maxTokens: settings.maxTokens,
+      modelId: this.currentSession!.modelId || activeProvider.defaultModel,
+      messages: compressedMessages,
+      temperature: activeProvider.temperature,
+      maxTokens: activeProvider.maxTokens,
+      providerId: this.currentSession!.providerId || settings.activeProviderId
     };
     
     let response: ChatCompletionResponse;
@@ -245,19 +272,17 @@ export class ChatService {
     try {
       this.isStreaming = true;
       
-      if (onUpdate) {
-        // 流式响应，传递场景参数
-        response = await aiServiceManager.createChatCompletionStream(
-          request,
-          (partialResponse) => {
-            onUpdate(partialResponse);
-          },
-          scenario
-        );
-      } else {
-        // 普通响应，传递场景参数
-        response = await aiServiceManager.createChatCompletion(request, scenario);
-      }
+      // 创建AI请求
+      const aiRequest: AIRequest = {
+        request,
+        scenario,
+        stream: !!onUpdate,
+        callback: onUpdate
+      };
+      
+      // 使用请求队列处理请求，并设置优先级
+      // 当前对话的消息优先级为2，编辑器相关请求优先级通常为1
+      response = await aiRequestQueue.addRequest(aiRequest, 2);
       
       // 将AI响应添加到会话
       this.currentSession!.messages.push(response.message);
@@ -279,7 +304,7 @@ export class ChatService {
    */
   cancelRequest(): void {
     if (this.isStreaming) {
-      aiServiceManager.cancelRequest();
+      aiRequestQueue.cancelAll();
       this.isStreaming = false;
     }
   }
@@ -315,6 +340,15 @@ export class ChatService {
       console.error('更新会话标题失败:', error);
       return false;
     }
+  }
+  
+  /**
+   * 优化提示内容，确保不超过token限制
+   * @param prompt 提示内容
+   * @returns 优化后的提示内容
+   */
+  optimizePrompt(prompt: string): string {
+    return chatContextManager.optimizePrompt(prompt);
   }
 }
 

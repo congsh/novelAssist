@@ -137,6 +137,67 @@ function initStatisticsHandlers() {
   });
 
   /**
+   * 获取所有小说的统计信息
+   * 用于首页展示
+   */
+  ipcMain.handle('get-novels-statistics', async () => {
+    console.log('处理get-novels-statistics请求');
+    try {
+      await dbManager.waitForInitialization();
+      
+      // 获取所有小说的基本信息和章节数量
+      const query = `
+        SELECT 
+          n.id, 
+          n.title, 
+          n.word_count AS target_word_count,
+          n.status,
+          COUNT(c.id) AS chapter_count,
+          SUM(c.word_count) AS current_word_count
+        FROM 
+          novels n
+        LEFT JOIN 
+          chapters c ON n.id = c.novel_id
+        GROUP BY 
+          n.id
+        ORDER BY 
+          n.updated_at DESC
+      `;
+      
+      const novels = await dbManager.query(query);
+      
+      // 计算每个小说的统计信息
+      const novelsStatistics = novels.map(novel => {
+        const targetWordCount = novel.target_word_count || 50000; // 默认目标字数
+        const currentWordCount = novel.current_word_count || 0;
+        const progressPercentage = Math.min(100, Math.round((currentWordCount / targetWordCount) * 100));
+        
+        return {
+          id: novel.id,
+          title: novel.title,
+          targetWordCount,
+          currentWordCount,
+          chapterCount: novel.chapter_count,
+          status: novel.status,
+          progressPercentage
+        };
+      });
+      
+      console.log(`成功获取${novelsStatistics.length}部小说的统计数据`);
+      return {
+        success: true,
+        data: novelsStatistics
+      };
+    } catch (error) {
+      console.error('获取小说统计数据失败:', error);
+      return { 
+        success: false, 
+        error: `获取小说统计数据失败: ${error.message}` 
+      };
+    }
+  });
+
+  /**
    * 获取写作活动统计
    * 返回过去30天每天的写作字数
    */

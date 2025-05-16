@@ -927,7 +927,7 @@ const NovelDetail: React.FC = () => {
           <Tag 
             key={tag.id} 
             color={tag.color || '#1890ff'}
-            style={{ marginBottom: 8 }}
+            style={{ marginBottom: 8, color: '#fff', fontWeight: 'bold' }}
             closable
             onClose={() => handleRemoveTag(tag.id)}
           >
@@ -1596,7 +1596,7 @@ const NovelDetail: React.FC = () => {
               <Descriptions.Item label="更新时间">{formatDate(novel?.updated_at || '')}</Descriptions.Item>
               <Descriptions.Item label="分类">
                 {category ? (
-                  <Tag color={category.color || '#1890ff'} icon={<FolderOutlined />}>
+                  <Tag color={category.color || '#1890ff'} style={{ color: '#fff', fontWeight: 'bold' }} icon={<FolderOutlined />}>
                     {category.name}
                   </Tag>
                 ) : (

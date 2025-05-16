@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Typography, Card, Input, Button, List, Avatar, Divider, Tabs, Spin, message, Row, Col } from 'antd';
+import { Typography, Card, Input, Button, List, Avatar, Divider, Tabs, Spin, message, Row, Col, Empty } from 'antd';
 import { 
   RobotOutlined, 
   SendOutlined, 
   UserOutlined, 
   SettingOutlined, 
   MessageOutlined,
-  StopOutlined
+  StopOutlined,
+  PlusOutlined,
+  LoadingOutlined,
+  FileTextOutlined
 } from '@ant-design/icons';
 import { chatService } from '../../modules/ai/services/chat-service';
 import AISettings from '../../modules/ai/components/AISettings';
@@ -14,11 +17,12 @@ import ChatSessionList from '../../modules/ai/components/ChatSessionList';
 import CreativePrompts from '../../modules/ai/components/CreativePrompts';
 import { ChatMessage, ChatMessageRole, ChatSession, AIScenario } from '../../modules/ai/types';
 
-const { Title, Paragraph } = Typography;
+const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
+const { TabPane } = Tabs;
 
 /**
- * AI助手页面
+ * AI助手页面 - 优化版
  */
 const AIAssistantPage: React.FC = () => {
   const [inputValue, setInputValue] = useState('');
@@ -29,6 +33,7 @@ const AIAssistantPage: React.FC = () => {
   const [initializing, setInitializing] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [activeTab, setActiveTab] = useState('chat');
+  const inputRef = useRef<any>(null);
 
   // 初始化聊天服务
   useEffect(() => {
@@ -93,6 +98,10 @@ const AIAssistantPage: React.FC = () => {
       setCurrentSession(newSession);
       setMessages([]);
       setSessions(prev => [newSession, ...prev]);
+      // 聚焦输入框
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
       return newSession;
     } catch (error) {
       console.error('创建新会话失败:', error);
@@ -167,6 +176,8 @@ const AIAssistantPage: React.FC = () => {
       message.error('发送消息失败');
     } finally {
       setLoading(false);
+      // 聚焦输入框，方便继续输入
+      inputRef.current?.focus();
     }
   };
 
@@ -175,6 +186,10 @@ const AIAssistantPage: React.FC = () => {
     setInputValue(promptText);
     // 切换到聊天标签页
     setActiveTab('chat');
+    // 聚焦输入框
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
   };
 
   // 取消生成
@@ -183,15 +198,80 @@ const AIAssistantPage: React.FC = () => {
     setLoading(false);
   };
 
+  // 处理按键事件
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // 渲染消息列表
+  const renderMessages = () => {
+    if (messages.length === 0) {
+      return (
+        <Empty 
+          image={Empty.PRESENTED_IMAGE_SIMPLE} 
+          description="开始一个新的对话吧" 
+          style={{ margin: '100px 0' }}
+        />
+      );
+    }
+    
+    return (
+      <List
+        itemLayout="horizontal"
+        dataSource={messages}
+        renderItem={message => (
+          <List.Item style={{ padding: '12px 0' }}>
+            <List.Item.Meta
+              avatar={
+                <Avatar 
+                  icon={message.role === ChatMessageRole.USER ? <UserOutlined /> : <RobotOutlined />} 
+                  style={{ 
+                    backgroundColor: message.role === ChatMessageRole.USER ? '#1890ff' : '#52c41a'
+                  }}
+                />
+              }
+              title={message.role === ChatMessageRole.USER ? '你' : 'AI助手'}
+              description={
+                <div style={{ whiteSpace: 'pre-wrap' }}>
+                  {message.content}
+                </div>
+              }
+            />
+          </List.Item>
+        )}
+      />
+    );
+  };
+
   // Tabs配置
   const tabItems = [
     {
       key: 'chat',
       label: <><MessageOutlined /> 聊天</>,
       children: (
-        <Row gutter={16} style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}>
+        <Row gutter={16} style={{ height: 'calc(100vh - 180px)', overflow: 'hidden' }}>
           <Col xs={24} sm={24} md={6} lg={6} xl={5} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Card title="会话列表" size="small" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <Card 
+              title={
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span>会话列表</span>
+                  <Button 
+                    type="primary" 
+                    icon={<PlusOutlined />} 
+                    size="small"
+                    onClick={createNewSession}
+                  >
+                    新会话
+                  </Button>
+                </div>
+              } 
+              size="small" 
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              bodyStyle={{ flex: 1, overflow: 'auto', padding: '8px' }}
+            >
               <ChatSessionList 
                 sessions={sessions}
                 currentSessionId={currentSession?.id || null}
@@ -203,91 +283,58 @@ const AIAssistantPage: React.FC = () => {
           </Col>
           
           <Col xs={24} sm={24} md={18} lg={18} xl={19} style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Card style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-              <div style={{ flex: 1, overflow: 'auto', marginBottom: 16, padding: 10, background: '#f9f9f9', borderRadius: 4 }}>
-                {messages.length === 0 ? (
-                  <div style={{ textAlign: 'center', padding: '100px 0', color: '#999' }}>
-                    <RobotOutlined style={{ fontSize: 48, marginBottom: 16 }} />
-                    <p>您好！我是您的AI创作助手。我可以帮助您进行小说创作，提供灵感、建议和内容生成。</p>
-                    <p>请在下方输入您的问题或请求。</p>
+            <Card 
+              title={currentSession?.title || '新对话'} 
+              bordered={false}
+              style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
+              bodyStyle={{ flex: 1, overflow: 'auto', padding: '8px 16px' }}
+            >
+              {initializing ? (
+                <div style={{ textAlign: 'center', margin: '100px 0' }}>
+                  <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
+                  <p style={{ marginTop: 16 }}>正在初始化AI服务...</p>
                   </div>
                 ) : (
-                  <List
-                    itemLayout="horizontal"
-                    dataSource={messages}
-                    renderItem={(item) => {
-                      const isUser = item.role === ChatMessageRole.USER;
-                      return (
-                        <List.Item style={{ 
-                          textAlign: isUser ? 'right' : 'left',
-                          padding: '8px 0'
-                        }}>
-                          <List.Item.Meta
-                            avatar={!isUser && <Avatar icon={<RobotOutlined />} />}
-                            title={<div style={{ color: isUser ? '#1890ff' : '#000' }}>
-                              {isUser ? '您' : 'AI助手'}
-                            </div>}
-                            description={
-                              <Card 
-                                size="small" 
-                                style={{ 
-                                  display: 'inline-block',
-                                  maxWidth: '80%',
-                                  background: isUser ? '#e6f7ff' : '#fff'
-                                }}
-                              >
-                                {item.content}
-                              </Card>
-                            }
-                          />
-                          {isUser && <Avatar icon={<UserOutlined />} style={{ marginLeft: 8 }} />}
-                        </List.Item>
-                      );
-                    }}
-                  />
-                )}
+                <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ flex: 1, overflow: 'auto', paddingBottom: '16px' }}>
+                    {renderMessages()}
                 <div ref={messagesEndRef} />
               </div>
               
-              <Divider style={{ margin: '8px 0' }} />
-              
-              <div>
+                  <div style={{ marginTop: '16px', display: 'flex', alignItems: 'flex-end' }}>
                 <TextArea
-                  placeholder="输入您的问题或请求..."
-                  autoSize={{ minRows: 2, maxRows: 6 }}
-                  style={{ marginBottom: 16 }}
+                      ref={inputRef}
                   value={inputValue}
                   onChange={(e) => setInputValue(e.target.value)}
-                  onPressEnter={(e) => {
-                    if (!e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  disabled={loading}
+                      onKeyDown={handleKeyDown}
+                      placeholder="输入消息，按Enter发送，Shift+Enter换行"
+                      autoSize={{ minRows: 1, maxRows: 6 }}
+                      style={{ flex: 1 }}
+                      disabled={loading || initializing}
                 />
-                <div style={{ textAlign: 'right' }}>
+                    <div style={{ marginLeft: '8px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   {loading ? (
                     <Button 
                       danger
                       icon={<StopOutlined />} 
                       onClick={handleCancel}
-                      style={{ marginRight: 8 }}
                     >
-                      取消生成
+                          停止
                     </Button>
-                  ) : null}
+                      ) : (
                   <Button 
                     type="primary" 
                     icon={<SendOutlined />} 
                     onClick={handleSend}
-                    loading={loading}
-                    disabled={!inputValue.trim()}
+                          disabled={!inputValue.trim() || initializing}
                   >
                     发送
                   </Button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </Card>
           </Col>
         </Row>
@@ -295,41 +342,25 @@ const AIAssistantPage: React.FC = () => {
     },
     {
       key: 'prompts',
-      label: '提示词库',
-      children: <div style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}><CreativePrompts onUsePrompt={usePrompt} /></div>
+      label: <><FileTextOutlined /> 提示词</>,
+      children: <CreativePrompts onUsePrompt={usePrompt} />
     },
     {
       key: 'settings',
-      label: <><SettingOutlined /> AI设置</>,
-      children: <div style={{ height: 'calc(100vh - 200px)', overflow: 'hidden' }}><AISettings /></div>
+      label: <><SettingOutlined /> 设置</>,
+      children: <AISettings />
     }
   ];
 
-  if (initializing) {
-    return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin size="large" />
-        <p>正在初始化AI助手...</p>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <div>
-        <Title level={2}>AI助手</Title>
-        <Paragraph>AI助手可以帮助您进行创作，提供灵感和建议</Paragraph>
-      </div>
-      
-      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: 'calc(100vh - 64px)', padding: '16px', display: 'flex', flexDirection: 'column' }}>
         <Tabs 
           activeKey={activeTab} 
           onChange={setActiveTab} 
+        style={{ flex: 1, display: 'flex', flexDirection: 'column' }}
+        tabBarStyle={{ marginBottom: '8px' }}
           items={tabItems} 
-          style={{ flex: 1, display: 'flex', flexDirection: 'column' }} 
-          className="ai-assistant-tabs"
         />
-      </div>
     </div>
   );
 };

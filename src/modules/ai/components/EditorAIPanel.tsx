@@ -10,7 +10,9 @@ import {
   Spin, 
   notification,
   Tooltip,
-  Alert
+  Alert,
+  Card,
+  Empty
 } from 'antd';
 import {
   RobotOutlined,
@@ -23,7 +25,8 @@ import {
   CheckOutlined,
   CloseOutlined,
   UndoOutlined,
-  SettingOutlined
+  SettingOutlined,
+  LoadingOutlined
 } from '@ant-design/icons';
 import { aiEditorService } from '../index';
 import { 
@@ -58,7 +61,7 @@ interface EditorAIPanelProps {
 }
 
 /**
- * 编辑器AI面板组件
+ * 编辑器AI面板组件 - 优化版
  */
 const EditorAIPanel: React.FC<EditorAIPanelProps> = ({
   chapterId,
@@ -94,10 +97,32 @@ const EditorAIPanel: React.FC<EditorAIPanelProps> = ({
 
   // 处理AI操作
   const handleAIAction = async (actionType: EditorAIActionType) => {
-    if (!content) {
+    // 验证必要的内容
+    if (!content && actionType !== EditorAIActionType.CONTINUE) {
       notification.warning({
         message: '内容为空',
         description: '请先输入或选择内容后再使用AI功能'
+      });
+      return;
+    }
+    
+    // 对于需要选择文本的操作，验证是否有选择
+    if ((actionType === EditorAIActionType.POLISH || 
+         actionType === EditorAIActionType.EXTRACT_CHARACTER || 
+         actionType === EditorAIActionType.EXTRACT_LOCATION) && 
+        !selection) {
+      notification.warning({
+        message: '未选择文本',
+        description: '请先选择要处理的文本段落'
+      });
+      return;
+    }
+    
+    // 对于续写操作，验证是否有光标位置
+    if (actionType === EditorAIActionType.CONTINUE && cursorPosition === undefined) {
+      notification.warning({
+        message: '未设置光标位置',
+        description: '请先将光标放置在要续写的位置'
       });
       return;
     }
@@ -202,7 +227,7 @@ const EditorAIPanel: React.FC<EditorAIPanelProps> = ({
       onCreateCharacter(response.extractedData);
       notification.success({
         message: '已创建角色',
-        description: `角色 ${response.extractedData.name || '未命名'} 已创建`
+        description: `角色 "${response.extractedData.name}" 已创建`
       });
       setResponse(null);
     }
@@ -214,7 +239,7 @@ const EditorAIPanel: React.FC<EditorAIPanelProps> = ({
       onCreateLocation(response.extractedData);
       notification.success({
         message: '已创建地点',
-        description: `地点 ${response.extractedData.name || '未命名'} 已创建`
+        description: `地点 "${response.extractedData.name}" 已创建`
       });
       setResponse(null);
     }
@@ -238,472 +263,365 @@ const EditorAIPanel: React.FC<EditorAIPanelProps> = ({
       onAddTimeline(response.extractedData);
       notification.success({
         message: '已添加时间线事件',
-        description: `事件 ${response.extractedData.title || '未命名'} 已添加到时间线`
+        description: `时间线事件 "${response.extractedData.title}" 已添加`
       });
       setResponse(null);
     }
   };
 
-  // 跳转到AI设置页面
+  // 前往AI设置
   const goToAISettings = () => {
-    navigate('/ai-settings');
+    navigate('/ai-assistant?tab=settings');
   };
 
   // 渲染响应内容
   const renderResponse = () => {
     if (!response) return null;
+    
+    if (response.status === 'error') {
+      return (
+        <Alert
+          message="操作失败"
+          description={response.error || '未知错误'}
+          type="error"
+          showIcon
+        />
+      );
+    }
 
     switch (response.actionType) {
       case EditorAIActionType.POLISH:
       case EditorAIActionType.CONTINUE:
         return (
-          <div>
-            <Title level={5}>修改预览</Title>
+          <Card size="small" title="AI修改建议" style={{ marginTop: 16 }}>
             <TextDiffViewer 
               original={response.originalContent} 
-              modified={response.modifiedContent || response.originalContent} 
+              modified={response.modifiedContent || ''}
               diffs={response.diff || []} 
             />
-            <Divider />
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
             <Space>
-              <Button 
-                type="primary" 
-                icon={<CheckOutlined />} 
-                onClick={handleApplyChanges}
-              >
-                应用修改
-              </Button>
-              <Button 
-                danger 
-                icon={<CloseOutlined />} 
-                onClick={handleRejectChanges}
-              >
+                <Button icon={<CloseOutlined />} onClick={handleRejectChanges}>
                 拒绝
               </Button>
+                <Button type="primary" icon={<CheckOutlined />} onClick={handleApplyChanges}>
+                  应用
+                </Button>
             </Space>
           </div>
+          </Card>
         );
       
       case EditorAIActionType.EXTRACT_CHARACTER:
+        if (!response.extractedData) return null;
         return (
+          <Card size="small" title="提取的角色信息" style={{ marginTop: 16 }}>
           <div>
-            <Title level={5}>提取的角色信息</Title>
-            {response.extractedData ? (
-              <div>
-                <Paragraph>
-                  <Text strong>姓名：</Text> {response.extractedData.name || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>性别：</Text> {response.extractedData.gender || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>年龄：</Text> {response.extractedData.age || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>外貌：</Text> {response.extractedData.appearance || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>性格：</Text> {response.extractedData.personality || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>背景：</Text> {response.extractedData.background || '未知'}
-                </Paragraph>
-                <Divider />
+              <p><strong>名称:</strong> {response.extractedData.name}</p>
+              <p><strong>描述:</strong> {response.extractedData.description}</p>
+              {response.extractedData.traits && (
+                <p><strong>特点:</strong> {response.extractedData.traits.join(', ')}</p>
+              )}
+              {response.extractedData.background && (
+                <p><strong>背景:</strong> {response.extractedData.background}</p>
+              )}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <Space>
+                <Button icon={<CloseOutlined />} onClick={() => setResponse(null)}>
+                  取消
+                </Button>
                 <Button 
                   type="primary" 
                   icon={<UserOutlined />} 
                   onClick={handleCreateCharacter}
+                  disabled={!onCreateCharacter}
                 >
                   创建角色
                 </Button>
+              </Space>
               </div>
-            ) : (
-              <Text type="danger">无法提取角色信息</Text>
-            )}
-          </div>
+          </Card>
         );
       
       case EditorAIActionType.EXTRACT_LOCATION:
+        if (!response.extractedData) return null;
         return (
+          <Card size="small" title="提取的地点信息" style={{ marginTop: 16 }}>
           <div>
-            <Title level={5}>提取的地点信息</Title>
-            {response.extractedData ? (
-              <div>
-                <Paragraph>
-                  <Text strong>名称：</Text> {response.extractedData.name || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>描述：</Text> {response.extractedData.description || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>特点：</Text> {response.extractedData.features || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>重要性：</Text> {response.extractedData.importance || '未知'}
-                </Paragraph>
-                <Divider />
+              <p><strong>名称:</strong> {response.extractedData.name}</p>
+              <p><strong>描述:</strong> {response.extractedData.description}</p>
+              {response.extractedData.features && (
+                <p><strong>特点:</strong> {response.extractedData.features.join(', ')}</p>
+              )}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <Space>
+                <Button icon={<CloseOutlined />} onClick={() => setResponse(null)}>
+                  取消
+                </Button>
                 <Button 
                   type="primary" 
                   icon={<EnvironmentOutlined />} 
                   onClick={handleCreateLocation}
+                  disabled={!onCreateLocation}
                 >
                   创建地点
                 </Button>
+              </Space>
               </div>
-            ) : (
-              <Text type="danger">无法提取地点信息</Text>
-            )}
-          </div>
+          </Card>
         );
       
       case EditorAIActionType.UPDATE_OUTLINE:
+        if (!response.extractedData) return null;
         return (
+          <Card size="small" title="提取的大纲信息" style={{ marginTop: 16 }}>
           <div>
-            <Title level={5}>更新的大纲信息</Title>
-            {response.extractedData ? (
-              <div>
-                <Paragraph>
-                  <Text strong>标题：</Text> {response.extractedData.title || title || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>摘要：</Text> {response.extractedData.summary || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>关键点：</Text>
+              <p><strong>摘要:</strong> {response.extractedData.summary}</p>
+              {response.extractedData.keyPoints && (
+                <>
+                  <p><strong>要点:</strong></p>
                   <ul>
-                    {response.extractedData.keyPoints ? 
-                      (Array.isArray(response.extractedData.keyPoints) ? 
-                        response.extractedData.keyPoints.map((point: string, index: number) => (
+                    {response.extractedData.keyPoints.map((point: string, index: number) => (
                           <li key={index}>{point}</li>
-                        )) : 
-                        <li>{response.extractedData.keyPoints}</li>
-                      ) : 
-                      <li>无关键点</li>
-                    }
+                    ))}
                   </ul>
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>涉及角色：</Text>
-                  <ul>
-                    {response.extractedData.characters ? 
-                      (Array.isArray(response.extractedData.characters) ? 
-                        response.extractedData.characters.map((char: string, index: number) => (
-                          <li key={index}>{char}</li>
-                        )) : 
-                        <li>{response.extractedData.characters}</li>
-                      ) : 
-                      <li>无涉及角色</li>
-                    }
-                  </ul>
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>涉及地点：</Text>
-                  <ul>
-                    {response.extractedData.locations ? 
-                      (Array.isArray(response.extractedData.locations) ? 
-                        response.extractedData.locations.map((loc: string, index: number) => (
-                          <li key={index}>{loc}</li>
-                        )) : 
-                        <li>{response.extractedData.locations}</li>
-                      ) : 
-                      <li>无涉及地点</li>
-                    }
-                  </ul>
-                </Paragraph>
-                <Divider />
+                </>
+              )}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <Space>
+                <Button icon={<CloseOutlined />} onClick={() => setResponse(null)}>
+                  取消
+                </Button>
                 <Button 
                   type="primary" 
                   icon={<OrderedListOutlined />} 
                   onClick={handleUpdateOutline}
+                  disabled={!onUpdateOutline}
                 >
                   更新大纲
                 </Button>
+              </Space>
               </div>
-            ) : (
-              <Text type="danger">无法更新大纲信息</Text>
-            )}
-          </div>
+          </Card>
         );
       
       case EditorAIActionType.ADD_TIMELINE:
+        if (!response.extractedData) return null;
         return (
+          <Card size="small" title="提取的时间线事件" style={{ marginTop: 16 }}>
           <div>
-            <Title level={5}>提取的时间线事件</Title>
-            {response.extractedData ? (
-              <div>
-                <Paragraph>
-                  <Text strong>事件名称：</Text> {response.extractedData.title || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>时间：</Text> {response.extractedData.time || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>描述：</Text> {response.extractedData.description || '未知'}
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>相关人物：</Text>
-                  {response.extractedData.characters ? 
-                    (Array.isArray(response.extractedData.characters) ? 
-                      response.extractedData.characters.join(', ') : 
-                      response.extractedData.characters
-                    ) : 
-                    '无'
-                  }
-                </Paragraph>
-                <Paragraph>
-                  <Text strong>地点：</Text> {response.extractedData.location || '未知'}
-                </Paragraph>
-                <Divider />
+              <p><strong>标题:</strong> {response.extractedData.title}</p>
+              <p><strong>描述:</strong> {response.extractedData.description}</p>
+              {response.extractedData.date && (
+                <p><strong>时间:</strong> {response.extractedData.date}</p>
+              )}
+              {response.extractedData.characters && (
+                <p><strong>相关角色:</strong> {response.extractedData.characters.join(', ')}</p>
+              )}
+            </div>
+            <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+              <Space>
+                <Button icon={<CloseOutlined />} onClick={() => setResponse(null)}>
+                  取消
+                </Button>
                 <Button 
                   type="primary" 
                   icon={<FieldTimeOutlined />} 
                   onClick={handleAddTimeline}
+                  disabled={!onAddTimeline}
                 >
-                  添加到时间线
+                  添加事件
                 </Button>
+              </Space>
               </div>
-            ) : (
-              <Text type="danger">无法提取时间线事件</Text>
-            )}
-          </div>
+          </Card>
         );
       
       default:
-        return (
-          <Text type="warning">未知的AI操作类型</Text>
-        );
+        return null;
     }
   };
 
-  // 如果有服务错误，显示错误提示
-  if (serviceError) {
+  // 渲染服务错误信息
+  const renderServiceError = () => {
+    if (!serviceError) return null;
+    
     return (
-      <div style={{ padding: '20px' }}>
         <Alert
           message="AI服务未初始化"
           description={
             <div>
               <p>{serviceError}</p>
-              <p>请先配置AI服务后再使用AI助手功能。</p>
-            </div>
-          }
-          type="error"
-          showIcon
-          action={
-            <Button 
-              type="primary" 
-              icon={<SettingOutlined />} 
-              onClick={goToAISettings}
-            >
+            <Button type="primary" onClick={goToAISettings}>
               前往设置
             </Button>
-          }
-        />
-      </div>
+          </div>
+        }
+        type="warning"
+        showIcon
+      />
     );
+  };
+
+  // 渲染操作说明
+  const renderActionDescription = (actionType: EditorAIActionType) => {
+    switch (actionType) {
+      case EditorAIActionType.POLISH:
+        return '选择文本后，AI将帮您润色和改进文字表达';
+      case EditorAIActionType.CONTINUE:
+        return '将光标放在需要续写的位置，AI将为您生成后续内容';
+      case EditorAIActionType.EXTRACT_CHARACTER:
+        return '选择包含角色描述的文本，AI将提取角色信息';
+      case EditorAIActionType.EXTRACT_LOCATION:
+        return '选择包含地点描述的文本，AI将提取地点信息';
+      case EditorAIActionType.UPDATE_OUTLINE:
+        return 'AI将分析当前章节内容，提取关键信息更新大纲';
+      case EditorAIActionType.ADD_TIMELINE:
+        return '选择包含事件描述的文本，AI将提取并创建时间线事件';
+      default:
+        return '';
   }
+  };
 
   return (
     <div className="editor-ai-panel">
-      <Tabs activeKey={activeTab} onChange={setActiveTab}>
+      {serviceError ? (
+        renderServiceError()
+      ) : (
+        <>
+          <Tabs activeKey={activeTab} onChange={setActiveTab} size="small">
         <TabPane 
-          tab={
-            <Tooltip title="润色文本">
-              <span><EditOutlined /> 润色</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="润色文本"><EditOutlined /> 润色</Tooltip>} 
           key="polish"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              使用AI润色文本，使其更加流畅生动。
-              {selection ? <Text type="success"> 已选择{selection.length}个字符</Text> : <Text type="warning"> 未选择文本将润色全文</Text>}
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.POLISH)}
             </Paragraph>
-            <TextArea
-              placeholder="输入特定指令，例如：'使语言更加优美'"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              rows={2}
-              style={{ marginBottom: 8 }}
-            />
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.POLISH)}
               loading={loading && activeTab === 'polish'}
-              icon={<RobotOutlined />}
+                disabled={!selection}
+                block
             >
-              润色文本
+                润色选中文本
             </Button>
-          </div>
         </TabPane>
         
         <TabPane 
-          tab={
-            <Tooltip title="续写内容">
-              <span><FileTextOutlined /> 续写</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="续写内容"><FileTextOutlined /> 续写</Tooltip>} 
           key="continue"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              在当前光标位置续写内容。
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.CONTINUE)}
             </Paragraph>
-            <TextArea
-              placeholder="输入特定指令，例如：'描写角色的内心活动'"
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              rows={2}
-              style={{ marginBottom: 8 }}
-            />
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.CONTINUE)}
               loading={loading && activeTab === 'continue'}
-              icon={<RobotOutlined />}
+                disabled={cursorPosition === undefined}
+                block
             >
-              续写内容
+                从光标处续写
             </Button>
-          </div>
         </TabPane>
         
         <TabPane 
-          tab={
-            <Tooltip title="提取角色">
-              <span><UserOutlined /> 角色</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="提取角色"><UserOutlined /> 角色</Tooltip>} 
           key="character"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              从文本中提取角色信息并创建角色。
-              {selection ? <Text type="success"> 已选择{selection.length}个字符</Text> : <Text type="warning"> 未选择文本将分析全文</Text>}
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.EXTRACT_CHARACTER)}
             </Paragraph>
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.EXTRACT_CHARACTER)}
               loading={loading && activeTab === 'character'}
-              icon={<RobotOutlined />}
+                disabled={!selection}
+                block
             >
-              提取角色
+                提取角色信息
             </Button>
-          </div>
         </TabPane>
         
         <TabPane 
-          tab={
-            <Tooltip title="提取地点">
-              <span><EnvironmentOutlined /> 地点</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="提取地点"><EnvironmentOutlined /> 地点</Tooltip>} 
           key="location"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              从文本中提取地点信息并创建地点。
-              {selection ? <Text type="success"> 已选择{selection.length}个字符</Text> : <Text type="warning"> 未选择文本将分析全文</Text>}
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.EXTRACT_LOCATION)}
             </Paragraph>
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.EXTRACT_LOCATION)}
               loading={loading && activeTab === 'location'}
-              icon={<RobotOutlined />}
+                disabled={!selection}
+                block
             >
-              提取地点
+                提取地点信息
             </Button>
-          </div>
         </TabPane>
         
         <TabPane 
-          tab={
-            <Tooltip title="更新大纲">
-              <span><OrderedListOutlined /> 大纲</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="更新大纲"><OrderedListOutlined /> 大纲</Tooltip>} 
           key="outline"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              分析当前章节内容，更新或创建大纲。
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.UPDATE_OUTLINE)}
             </Paragraph>
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.UPDATE_OUTLINE)}
               loading={loading && activeTab === 'outline'}
-              icon={<RobotOutlined />}
+                disabled={!content}
+                block
             >
-              更新大纲
+                生成章节大纲
             </Button>
-          </div>
         </TabPane>
         
         <TabPane 
-          tab={
-            <Tooltip title="添加时间线">
-              <span><FieldTimeOutlined /> 时间线</span>
-            </Tooltip>
-          } 
+              tab={<Tooltip title="添加时间线"><FieldTimeOutlined /> 时间线</Tooltip>} 
           key="timeline"
         >
-          <div style={{ marginBottom: 16 }}>
-            <Paragraph>
-              从文本中提取事件信息并添加到时间线。
-              {selection ? <Text type="success"> 已选择{selection.length}个字符</Text> : <Text type="warning"> 未选择文本将分析全文</Text>}
+              <Paragraph type="secondary" style={{ fontSize: '12px', marginBottom: 8 }}>
+                {renderActionDescription(EditorAIActionType.ADD_TIMELINE)}
             </Paragraph>
             <Button 
               type="primary" 
               onClick={() => handleAIAction(EditorAIActionType.ADD_TIMELINE)}
               loading={loading && activeTab === 'timeline'}
-              icon={<RobotOutlined />}
+                disabled={!selection}
+                block
             >
-              提取事件
+                提取时间线事件
             </Button>
-          </div>
         </TabPane>
       </Tabs>
       
-      <Divider />
-      
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <Spin size="large" />
-          <div style={{ marginTop: 16 }}>
-            正在处理，请稍候...
+          <div style={{ marginTop: 12 }}>
+            <TextArea
+              placeholder="可选：添加特定指令或要求..."
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              autoSize={{ minRows: 2, maxRows: 4 }}
+              disabled={loading}
+              style={{ marginBottom: 8 }}
+            />
           </div>
+          
+          {loading && (
+            <div style={{ textAlign: 'center', margin: '16px 0' }}>
+              <Spin indicator={<LoadingOutlined style={{ fontSize: 24 }} spin />} />
+              <p style={{ marginTop: 8 }}>AI正在处理中...</p>
         </div>
-      ) : response ? (
-        <div className="ai-response">
-          {renderResponse()}
-        </div>
-      ) : (
-        <div className="history-list">
-          {history.length > 0 ? (
-            <>
-              <Title level={5}>历史记录</Title>
-              <ul style={{ padding: 0, listStyle: 'none' }}>
-                {history.slice(0, 5).map((item) => (
-                  <li key={item.id} style={{ marginBottom: 8 }}>
-                    <Text type={item.status === 'applied' ? 'success' : item.status === 'rejected' ? 'danger' : 'secondary'}>
-                      {new Date(item.timestamp).toLocaleString()} - 
-                      {item.actionType === EditorAIActionType.POLISH ? ' 润色' : 
-                       item.actionType === EditorAIActionType.CONTINUE ? ' 续写' :
-                       item.actionType === EditorAIActionType.EXTRACT_CHARACTER ? ' 提取角色' :
-                       item.actionType === EditorAIActionType.EXTRACT_LOCATION ? ' 提取地点' :
-                       item.actionType === EditorAIActionType.UPDATE_OUTLINE ? ' 更新大纲' :
-                       item.actionType === EditorAIActionType.ADD_TIMELINE ? ' 添加时间线' : ' 未知操作'}
-                      {item.status === 'applied' ? ' (已应用)' : 
-                       item.status === 'rejected' ? ' (已拒绝)' : 
-                       item.status === 'modified' ? ' (已修改)' : ' (待处理)'}
-                    </Text>
-                  </li>
-                ))}
-              </ul>
-            </>
-          ) : (
-            <Text type="secondary">暂无历史记录</Text>
           )}
-        </div>
+          
+          {renderResponse()}
+        </>
       )}
     </div>
   );
