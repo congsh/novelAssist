@@ -12,7 +12,7 @@ module.exports = {
   output: {
     path: path.resolve(__dirname, '../build'),
     filename: 'renderer.js',
-    publicPath: './',
+    publicPath: isDevelopment ? '/' : './',
   },
   resolve: {
     extensions: ['.tsx', '.ts', '.js', '.jsx', '.json'],

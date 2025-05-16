@@ -47,7 +47,7 @@ function createWindow() {
         'Content-Security-Policy': [
           process.env.NODE_ENV === 'development'
             ? "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:3000; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://localhost:3000 http://localhost:3000 https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data: http://localhost:3000"
-            : "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data:"
+            : "default-src 'self' file:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; connect-src 'self' file: https://*.openai.com https://*.deepseek.com https://*.dashscope.aliyuncs.com https://*.anthropic.com https://api.stability.ai https://*.baidu.com https://*.qianfan.cloud https://*.volcengine.com https:; img-src 'self' data: file:"
         ]
       }
     });
@@ -57,7 +57,7 @@ function createWindow() {
   const startUrl = process.env.NODE_ENV === 'development' 
     ? 'http://localhost:3000'
     : url.format({
-        pathname: path.resolve(app.getAppPath(), 'build/index.html'),
+        pathname: path.join(__dirname, '../../build/index.html'),
         protocol: 'file:',
         slashes: true
       });
@@ -71,7 +71,7 @@ function createWindow() {
     
     // 如果加载失败，尝试备用路径
     const backupUrl = url.format({
-      pathname: path.resolve(app.getAppPath(), 'build/index.html'),
+      pathname: path.join(__dirname, '../../build/index.html'),
       protocol: 'file:',
       slashes: true
     });
@@ -102,7 +102,27 @@ function createWindow() {
         logger.error('读取index.html失败:', error);
       }
     }
+    
+    // 在生产环境中也打开开发者工具以便调试
+    mainWindow.webContents.openDevTools();
+    
+    // 在生产环境中也允许打开开发者工具（通过快捷键Ctrl+Shift+I）
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+        mainWindow.webContents.openDevTools();
+        event.preventDefault();
+      }
+    });
   }
+  
+  // 添加全局错误处理
+  process.on('uncaughtException', (error) => {
+    logger.error('未捕获的异常:', error);
+  });
+  
+  process.on('unhandledRejection', (reason, promise) => {
+    logger.error('未处理的Promise拒绝:', reason);
+  });
   
   // 监听页面加载完成事件
   mainWindow.webContents.on('did-finish-load', () => {
@@ -131,6 +151,30 @@ app.whenReady().then(() => {
 
   // 初始化数据库连接
   require('./database/db-manager');
+  
+  // 加载IPC处理器
+  require('./ipc/novel-handler');
+  require('./ipc/ai-handler');
+  require('./ipc/location-handler');
+  require('./ipc/outline-handler');
+
+  // 加载人物和时间线IPC处理器
+  const { initCharacterHandlers } = require('./ipc/character-handler');
+  const { initTimelineHandlers } = require('./ipc/timeline-handler');
+  const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
+  const { initBackupHandlers } = require('./ipc/backup-handler');
+  const { initStatisticsHandlers } = require('./ipc/statistics-handler');
+  const { registerAIHandlers } = require('./ipc/ai-handler');
+  const { registerSettingsHandlers } = require('./ipc/settings-handler');
+
+  // 初始化人物和时间线IPC处理器
+  initCharacterHandlers();
+  initTimelineHandlers();
+  initNovelAssociationHandlers();
+  initBackupHandlers();
+  initStatisticsHandlers();
+  registerAIHandlers();
+  registerSettingsHandlers();
 
   // 设置应用菜单
   setupMenu();
@@ -233,28 +277,4 @@ function setupMenu() {
   const menu = Menu.buildFromTemplate(template);
   Menu.setApplicationMenu(menu);
   logger.info('应用菜单已设置');
-}
-
-// 加载IPC处理器
-require('./ipc/novel-handler');
-require('./ipc/ai-handler');
-require('./ipc/location-handler');
-require('./ipc/outline-handler');
-
-// 加载人物和时间线IPC处理器
-const { initCharacterHandlers } = require('./ipc/character-handler');
-const { initTimelineHandlers } = require('./ipc/timeline-handler');
-const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
-const { initBackupHandlers } = require('./ipc/backup-handler');
-const { initStatisticsHandlers } = require('./ipc/statistics-handler');
-const { registerAIHandlers } = require('./ipc/ai-handler');
-const { registerSettingsHandlers } = require('./ipc/settings-handler');
-
-// 初始化人物和时间线IPC处理器
-initCharacterHandlers();
-initTimelineHandlers();
-initNovelAssociationHandlers();
-initBackupHandlers();
-initStatisticsHandlers();
-registerAIHandlers();
-registerSettingsHandlers(); 
+} 

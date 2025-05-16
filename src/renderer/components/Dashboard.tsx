@@ -30,8 +30,10 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        console.log('正在调用get-novels...');
         // 获取小说列表
         const novelsResponse = await window.electron.invoke('get-novels');
+        console.log('get-novels响应:', novelsResponse);
         
         if (novelsResponse.success) {
           const novels = novelsResponse.data;
@@ -47,9 +49,16 @@ const Dashboard: React.FC = () => {
             todayWords: 0, // 暂时没有实现统计今日字数
             writingTime: 0 // 暂时没有实现统计写作时间
           });
+        } else {
+          console.error('获取小说列表失败:', novelsResponse.error);
         }
       } catch (error) {
         console.error('加载数据失败:', error);
+        // 显示详细错误信息
+        if (error instanceof Error) {
+          console.error('错误详情:', error.message);
+          console.error('错误堆栈:', error.stack);
+        }
       } finally {
         setLoading(false);
       }
