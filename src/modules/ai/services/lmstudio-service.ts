@@ -5,13 +5,14 @@ import {
 } from './ai-base-service';
 import { 
   AIModel, 
-  AIProvider, 
+  AIProviderType, 
   AISettings, 
   ChatCompletionRequest, 
   ChatCompletionResponse, 
   ChatMessage, 
   ChatMessageRole 
 } from '../types';
+import https from 'https';
 
 /**
  * LMStudio服务实现
@@ -28,16 +29,29 @@ export class LMStudioService implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     try {
-      if (settings.provider !== AIProvider.LMSTUDIO) {
-        throw new Error('无效的AI提供商设置');
+      // 获取当前活动的提供商
+      const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+      
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
-      const baseUrl = settings.localServerUrl || 'http://localhost:1234/v1';
+      if (activeProvider.type !== AIProviderType.LMSTUDIO) {
+        throw new Error('当前提供商不是LMStudio类型');
+      }
+      
+      const baseUrl = activeProvider.localServerUrl || 'http://localhost:1234/v1';
+      
+      // 创建自定义HTTPS代理，禁用证书验证
+      const httpsAgent = new https.Agent({
+        rejectUnauthorized: false
+      });
       
       this.client = new OpenAI({
         apiKey: 'lm-studio', // LMStudio不需要实际的API密钥，但OpenAI客户端需要一个非空字符串
         baseURL: baseUrl,
         dangerouslyAllowBrowser: true, // 允许在浏览器环境中使用
+        httpAgent: httpsAgent, // 禁用HTTPS证书验证
       });
       
       this.settings = settings;
@@ -56,8 +70,14 @@ export class LMStudioService implements AIBaseService {
    */
   async getAvailableModels(): Promise<AIModel[]> {
     try {
-      if (!this.client) {
+      if (!this.client || !this.settings) {
         throw new Error('LMStudio客户端未初始化');
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
       // 尝试获取模型列表
@@ -66,18 +86,28 @@ export class LMStudioService implements AIBaseService {
       return response.data.map(model => ({
         id: model.id,
         name: model.id,
-        provider: AIProvider.LMSTUDIO,
+        providerId: activeProvider.id,
         description: `LMStudio ${model.id} 模型`,
       }));
     } catch (error) {
       console.error('获取LMStudio模型列表失败:', error);
       
-      // 返回一个默认模型
+      // 如果无法获取模型列表，返回一个默认模型
+      if (!this.settings) {
+        return [];
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
+      if (!activeProvider) {
+        return [];
+      }
+      
       return [
         {
           id: 'local-model',
           name: 'LMStudio 本地模型',
-          provider: AIProvider.LMSTUDIO,
+          providerId: activeProvider.id,
           description: 'LMStudio 本地运行的模型',
           contextWindow: 4096,
         },

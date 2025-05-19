@@ -4,13 +4,14 @@ import {
 } from './ai-base-service';
 import {
   AIModel,
-  AIProvider,
+  AIProviderType,
   AISettings,
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
   ChatMessageRole
 } from '../types';
+import https from 'https';
 
 /**
  * Ollama服务实现
@@ -26,11 +27,18 @@ export class OllamaService implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     try {
-      if (settings.provider !== AIProvider.OLLAMA) {
-        throw new Error('无效的AI提供商设置');
+      // 获取当前活动的提供商
+      const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+      
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
-      this.serverUrl = settings.localServerUrl || 'http://localhost:11434';
+      if (activeProvider.type !== AIProviderType.OLLAMA) {
+        throw new Error('当前提供商不是Ollama类型');
+      }
+      
+      this.serverUrl = activeProvider.localServerUrl || 'http://localhost:11434';
       this.settings = settings;
       
       // 测试连接
@@ -47,11 +55,26 @@ export class OllamaService implements AIBaseService {
    */
   async getAvailableModels(): Promise<AIModel[]> {
     try {
-      if (!this.serverUrl) {
+      if (!this.serverUrl || !this.settings) {
         throw new Error('Ollama服务器URL未设置');
       }
       
-      const response = await fetch(`${this.serverUrl}/api/tags`);
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
+      }
+      
+      // 创建请求选项，禁用SSL验证
+      const requestOptions: RequestInit & { agent?: https.Agent } = {};
+      if (this.serverUrl.startsWith('https')) {
+        const agent = new https.Agent({
+          rejectUnauthorized: false
+        });
+        requestOptions.agent = agent;
+      }
+      
+      const response = await fetch(`${this.serverUrl}/api/tags`, requestOptions);
       
       if (!response.ok) {
         throw new Error(`Ollama API请求失败: ${response.statusText}`);
@@ -66,7 +89,7 @@ export class OllamaService implements AIBaseService {
       return data.models.map((model: any) => ({
         id: model.name,
         name: model.name,
-        provider: AIProvider.OLLAMA,
+        providerId: activeProvider.id,
         description: `Ollama ${model.name} 模型`,
         contextWindow: 4096, // 默认值，可能根据实际模型而异
       }));
@@ -74,25 +97,35 @@ export class OllamaService implements AIBaseService {
       console.error('获取Ollama模型列表失败:', error);
       
       // 返回一些常见的Ollama模型作为后备
+      if (!this.settings) {
+        return [];
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
+      if (!activeProvider) {
+        return [];
+      }
+      
       return [
         {
           id: 'llama2',
           name: 'Llama 2',
-          provider: AIProvider.OLLAMA,
+          providerId: activeProvider.id,
           description: 'Llama 2 模型',
           contextWindow: 4096,
         },
         {
           id: 'mistral',
           name: 'Mistral',
-          provider: AIProvider.OLLAMA,
+          providerId: activeProvider.id,
           description: 'Mistral 模型',
           contextWindow: 8192,
         },
         {
           id: 'vicuna',
           name: 'Vicuna',
-          provider: AIProvider.OLLAMA,
+          providerId: activeProvider.id,
           description: 'Vicuna 模型',
           contextWindow: 4096,
         }
@@ -120,7 +153,8 @@ export class OllamaService implements AIBaseService {
         content: msg.content,
       }));
       
-      const response = await fetch(`${this.serverUrl}/api/chat`, {
+      // 创建请求选项，包括信号和禁用SSL验证
+      const requestOptions: RequestInit & { agent?: https.Agent } = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +169,17 @@ export class OllamaService implements AIBaseService {
           stream: false,
         }),
         signal: this.abortController.signal,
-      });
+      };
+      
+      // 如果是HTTPS请求，添加禁用SSL验证的选项
+      if (this.serverUrl.startsWith('https')) {
+        const agent = new https.Agent({
+          rejectUnauthorized: false
+        });
+        requestOptions.agent = agent as any;
+      }
+      
+      const response = await fetch(`${this.serverUrl}/api/chat`, requestOptions);
       
       if (!response.ok) {
         throw new Error(`Ollama API请求失败: ${response.statusText}`);
@@ -194,7 +238,8 @@ export class OllamaService implements AIBaseService {
         content: msg.content,
       }));
       
-      const response = await fetch(`${this.serverUrl}/api/chat`, {
+      // 创建请求选项，包括信号和禁用SSL验证
+      const requestOptions: RequestInit & { agent?: https.Agent } = {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -209,7 +254,17 @@ export class OllamaService implements AIBaseService {
           stream: true,
         }),
         signal: this.abortController.signal,
-      });
+      };
+      
+      // 如果是HTTPS请求，添加禁用SSL验证的选项
+      if (this.serverUrl.startsWith('https')) {
+        const agent = new https.Agent({
+          rejectUnauthorized: false
+        });
+        requestOptions.agent = agent as any;
+      }
+      
+      const response = await fetch(`${this.serverUrl}/api/chat`, requestOptions);
       
       if (!response.ok) {
         throw new Error(`Ollama API请求失败: ${response.statusText}`);
@@ -307,7 +362,16 @@ export class OllamaService implements AIBaseService {
         return false;
       }
       
-      const response = await fetch(`${this.serverUrl}/api/version`);
+      // 创建请求选项，禁用SSL验证
+      const requestOptions: RequestInit & { agent?: https.Agent } = {};
+      if (this.serverUrl.startsWith('https')) {
+        const agent = new https.Agent({
+          rejectUnauthorized: false
+        });
+        requestOptions.agent = agent;
+      }
+      
+      const response = await fetch(`${this.serverUrl}/api/version`, requestOptions);
       return response.ok;
     } catch (error) {
       console.error('Ollama连接测试失败:', error);

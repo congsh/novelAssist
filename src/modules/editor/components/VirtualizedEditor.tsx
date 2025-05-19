@@ -19,6 +19,11 @@ interface CellMeasurerProps {
   registerChild: (element: HTMLElement | null) => void;
 }
 
+// 添加类型断言
+const AutoSizerComponent = AutoSizer as React.ComponentType<any>;
+const ListComponent = List as React.ComponentType<any>;
+const CellMeasurerComponent = CellMeasurer as React.ComponentType<any>;
+
 /**
  * 虚拟化编辑器组件
  * 用于优化大文档编辑性能，通过虚拟滚动只渲染可见的内容
@@ -112,7 +117,7 @@ const VirtualizedEditor: React.FC<VirtualizedEditorProps> = ({
     const text = block.getText();
     
     return (
-      <CellMeasurer
+      <CellMeasurerComponent
         cache={cache.current}
         columnIndex={0}
         key={key}
@@ -131,7 +136,7 @@ const VirtualizedEditor: React.FC<VirtualizedEditorProps> = ({
             </div>
           </div>
         )}
-      </CellMeasurer>
+      </CellMeasurerComponent>
     );
   };
   
@@ -167,9 +172,9 @@ const VirtualizedEditor: React.FC<VirtualizedEditorProps> = ({
       </div>
       
       <div className="virtualized-editor-content">
-        <AutoSizer>
+        <AutoSizerComponent>
           {({ width, height }: { width: number; height: number }) => (
-            <List
+            <ListComponent
               ref={listRef}
               width={width}
               height={height}
@@ -183,7 +188,7 @@ const VirtualizedEditor: React.FC<VirtualizedEditorProps> = ({
               tabIndex={-1}
             />
           )}
-        </AutoSizer>
+        </AutoSizerComponent>
       </div>
     </div>
   );

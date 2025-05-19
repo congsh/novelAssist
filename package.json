@@ -21,7 +21,7 @@
     "@types/d3": "^7.4.3",
     "@types/lodash": "^4.17.16",
     "@types/react-beautiful-dnd": "^13.1.8",
-    "@types/react-virtualized": "^9.22.2",
+    "@types/react-virtualized": "9.21.21",
     "antd": "^5.0.0",
     "archiver": "^7.0.1",
     "d3": "^7.9.0",

@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import { useOutlineStore } from '../store/outlineStore';
 import { OutlineTreeNode, OutlineStatus } from '../../../shared/types/outline';
+import type { DataNode } from 'antd/es/tree';
 
 const { Title, Text } = Typography;
 
@@ -16,6 +17,12 @@ interface OutlineTreeProps {
   novelId: string;
   onAddOutline: (parentId?: string | null) => void;
   onEditOutline: (outlineId: string) => void;
+}
+
+interface TreeDataNode extends DataNode {
+  key: string;
+  children?: TreeDataNode[];
+  isLeaf?: boolean;
 }
 
 /**
@@ -64,7 +71,7 @@ const OutlineTree: React.FC<OutlineTreeProps> = ({
   };
   
   // 将大纲树转换为Ant Design Tree需要的格式
-  const convertToTreeData = (nodes: OutlineTreeNode[]) => {
+  const convertToTreeData = (nodes: OutlineTreeNode[]): TreeDataNode[] => {
     return nodes.map(node => ({
       key: node.id,
       title: (

@@ -5,13 +5,14 @@ import {
 } from './ai-base-service';
 import { 
   AIModel, 
-  AIProvider, 
+  AIProviderType, 
   AISettings, 
   ChatCompletionRequest, 
   ChatCompletionResponse, 
   ChatMessage, 
   ChatMessageRole 
 } from '../types';
+import https from 'https';
 
 /**
  * OpenAI服务实现
@@ -27,18 +28,31 @@ export class OpenAIService implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     try {
-      if (settings.provider !== AIProvider.OPENAI) {
-        throw new Error('无效的AI提供商设置');
+      // 获取当前活动的提供商
+      const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
+      
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
-      if (!settings.apiKey) {
+      if (activeProvider.type !== AIProviderType.OPENAI) {
+        throw new Error('当前提供商不是OpenAI类型');
+      }
+      
+      if (!activeProvider.apiKey) {
         throw new Error('缺少OpenAI API密钥');
       }
       
+      // 创建自定义HTTPS代理，禁用证书验证
+      const httpsAgent = new https.Agent({
+        rejectUnauthorized: false
+      });
+      
       this.client = new OpenAI({
-        apiKey: settings.apiKey,
-        baseURL: settings.baseUrl || undefined,
+        apiKey: activeProvider.apiKey,
+        baseURL: activeProvider.baseUrl || undefined,
         dangerouslyAllowBrowser: true,
+        httpAgent: httpsAgent,
       });
       
       this.settings = settings;
@@ -57,8 +71,14 @@ export class OpenAIService implements AIBaseService {
    */
   async getAvailableModels(): Promise<AIModel[]> {
     try {
-      if (!this.client) {
+      if (!this.client || !this.settings) {
         throw new Error('OpenAI客户端未初始化');
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      if (!activeProvider) {
+        throw new Error('未找到活动提供商');
       }
       
       const response = await this.client.models.list();
@@ -72,32 +92,44 @@ export class OpenAIService implements AIBaseService {
         .map(model => ({
           id: model.id,
           name: model.id,
-          provider: AIProvider.OPENAI,
+          providerId: activeProvider.id,
           description: `OpenAI ${model.id} 模型`,
+          contextWindow: model.id.includes('gpt-4-turbo') ? 128000 : 
+                        model.id.includes('gpt-4') ? 8192 : 4096,
         }));
     } catch (error) {
       console.error('获取OpenAI模型列表失败:', error);
+      
+      if (!this.settings) {
+        return [];
+      }
+      
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      if (!activeProvider) {
+        return [];
+      }
       
       // 返回硬编码的默认模型列表
       return [
         {
           id: 'gpt-3.5-turbo',
           name: 'GPT-3.5 Turbo',
-          provider: AIProvider.OPENAI,
+          providerId: activeProvider.id,
           description: 'OpenAI GPT-3.5 Turbo 模型',
           contextWindow: 4096,
         },
         {
           id: 'gpt-4',
           name: 'GPT-4',
-          provider: AIProvider.OPENAI,
+          providerId: activeProvider.id,
           description: 'OpenAI GPT-4 模型',
           contextWindow: 8192,
         },
         {
           id: 'gpt-4-turbo',
           name: 'GPT-4 Turbo',
-          provider: AIProvider.OPENAI,
+          providerId: activeProvider.id,
           description: 'OpenAI GPT-4 Turbo 模型',
           contextWindow: 128000,
         }
@@ -258,21 +290,39 @@ export class OpenAIService implements AIBaseService {
    */
   async testConnection(): Promise<boolean> {
     try {
-      if (!this.client) {
+      if (!this.client || !this.settings) {
         return false;
       }
       
-      // 使用轻量模型发送简单请求测试连接
-      const response = await this.client.chat.completions.create({
-        model: 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: 'Hello!' }],
-        max_tokens: 5,
-      });
+      // 获取当前活动的提供商
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      if (!activeProvider) {
+        return false;
+      }
       
-      return !!response.choices.length;
+      // 尝试获取models列表来测试连接
+      const response = await this.client.models.list();
+      return !!response.data.length;
     } catch (error) {
       console.error('OpenAI连接测试失败:', error);
-      return false;
+      
+      // 如果连接失败，尝试简单的请求测试
+      try {
+        if (!this.client) {
+          return false;
+        }
+        
+        // 使用轻量模型发送简单请求测试连接
+        const response = await this.client.chat.completions.create({
+          model: 'gpt-3.5-turbo',
+          messages: [{ role: 'user', content: 'Hello!' }],
+          max_tokens: 5,
+        });
+        
+        return !!response.choices.length;
+      } catch {
+        return false;
+      }
     }
   }
 } 

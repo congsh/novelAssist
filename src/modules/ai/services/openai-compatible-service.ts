@@ -12,6 +12,7 @@ import {
   ChatMessage, 
   ChatMessageRole 
 } from '../types';
+import https from 'https';
 
 /**
  * OpenAI Compatible服务实现
@@ -58,10 +59,16 @@ export class OpenAICompatibleService implements AIBaseService {
       
       console.log('使用API基础URL:', baseURL);
       
+      // 创建自定义HTTPS代理，禁用证书验证
+      const httpsAgent = new https.Agent({
+        rejectUnauthorized: false
+      });
+      
       this.client = new OpenAI({
         apiKey: activeProvider.apiKey || 'sk-no-key-required', // 某些兼容API可能不需要密钥
         baseURL: baseURL,
         dangerouslyAllowBrowser: true, // 允许在浏览器环境中使用
+        httpAgent: httpsAgent, // 禁用SSL证书验证
       });
       
       this.settings = settings;
@@ -85,7 +92,7 @@ export class OpenAICompatibleService implements AIBaseService {
       }
       
       // 获取当前活动的提供商
-      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
       if (!activeProvider) {
         throw new Error('未找到活动提供商');
       }
@@ -93,7 +100,7 @@ export class OpenAICompatibleService implements AIBaseService {
       // 首先尝试使用用户已经在settings中配置的models
       if (this.settings.models?.length) {
         const compatibleModels = this.settings.models.filter(
-          model => model.providerId === this.settings.activeProviderId
+          model => model.providerId === this.settings?.activeProviderId
         );
         
         if (compatibleModels.length > 0) {
@@ -297,7 +304,7 @@ export class OpenAICompatibleService implements AIBaseService {
     
     try {
       // 获取当前活动的提供商
-      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
       if (!activeProvider) {
         throw new Error('未找到活动提供商');
       }
@@ -310,7 +317,7 @@ export class OpenAICompatibleService implements AIBaseService {
       
       // 某些API不支持获取models，尝试发送简单请求
       try {
-        const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+        const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
         if (!activeProvider) {
           return false;
         }

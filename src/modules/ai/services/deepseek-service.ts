@@ -28,18 +28,18 @@ export class DeepSeekService implements AIBaseService {
    */
   async initialize(settings: AISettings): Promise<boolean> {
     try {
-      if (settings.provider !== AIProvider.DEEPSEEK) {
+      if (settings.providers.find(p => p.id === settings.activeProviderId)?.type !== AIProvider.DEEPSEEK) {
         throw new Error('无效的AI提供商设置');
       }
       
-      if (!settings.apiKey) {
+      if (!settings.providers.find(p => p.id === settings.activeProviderId)?.apiKey) {
         throw new Error('缺少DeepSeek API密钥');
       }
       
-      const baseUrl = settings.baseUrl || 'https://api.deepseek.com/v1';
+      const baseUrl = settings.providers.find(p => p.id === settings.activeProviderId)?.baseUrl || 'https://api.deepseek.com/v1';
       
       this.client = new OpenAI({
-        apiKey: settings.apiKey,
+        apiKey: settings.providers.find(p => p.id === settings.activeProviderId)?.apiKey,
         baseURL: baseUrl,
         dangerouslyAllowBrowser: true,
       });
@@ -64,14 +64,14 @@ export class DeepSeekService implements AIBaseService {
       {
         id: 'deepseek-chat',
         name: 'DeepSeek Chat',
-        provider: AIProvider.DEEPSEEK,
+        providerId: this.settings?.activeProviderId || '',
         description: 'DeepSeek Chat 基础模型',
         contextWindow: 16000,
       },
       {
         id: 'deepseek-coder',
         name: 'DeepSeek Coder',
-        provider: AIProvider.DEEPSEEK,
+        providerId: this.settings?.activeProviderId || '',
         description: 'DeepSeek Coder 代码模型',
         contextWindow: 16000,
       },
