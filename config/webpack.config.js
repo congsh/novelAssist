@@ -1,5 +1,7 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
+const webpack = require('webpack');
+const NodePolyfillPlugin = require('node-polyfill-webpack-plugin');
 
 const isDevelopment = process.env.NODE_ENV === 'development';
 
@@ -28,6 +30,11 @@ module.exports = {
       "fs": false,
       "stream": require.resolve("stream-browserify"),
       "buffer": require.resolve("buffer"),
+      "http": require.resolve("http-browserify"),
+      "https": require.resolve("https-browserify"),
+      "url": require.resolve("url/"),
+      "util": require.resolve("util/"),
+      "process": require.resolve("process/browser"),
     },
   },
   devtool: isDevelopment ? 'source-map' : false,
@@ -73,6 +80,7 @@ module.exports = {
     ],
   },
   plugins: [
+    new NodePolyfillPlugin(),
     new HtmlWebpackPlugin({
       template: './public/index.html',
       inject: true,
@@ -81,6 +89,18 @@ module.exports = {
         'content-type': { 'http-equiv': 'Content-Type', content: 'text/html; charset=UTF-8' }
       }
     }),
+    new webpack.ProvidePlugin({
+      process: 'process/browser',
+      Buffer: ['buffer', 'Buffer'],
+    }),
+    new webpack.NormalModuleReplacementPlugin(
+      /node:process/,
+      "process/browser.js"
+    ),
+    new webpack.NormalModuleReplacementPlugin(
+      /process\/browser$/,
+      "process/browser.js"
+    ),
   ],
   devServer: {
     static: {

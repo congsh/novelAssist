@@ -40,6 +40,11 @@
 - 修复小说导出格式问题
 - 修复安装程序中文显示乱码问题
 - 修复生产环境可能包含测试API密钥的安全隐患
+- 修复"Module not found: Error: Can't resolve 'https'"错误，通过配置Webpack在浏览器环境中使用https-browserify和http-browserify作为polyfill
+- 添加url和util polyfill，解决http-browserify和https-browserify的依赖问题
+- 修复"Uncaught ReferenceError: process is not defined"错误，通过添加process polyfill并使用ProvidePlugin提供全局process变量
+- 解决OpenAI库中使用ESM模块(*.mjs)导入process/browser的兼容性问题，通过添加NormalModuleReplacementPlugin和node-polyfill-webpack-plugin
+- 修复context-search-service.ts中缺少AIScenario导入的问题
 
 ### 删除
 - 移除过时的测试代码和未使用的依赖
@@ -141,6 +146,17 @@
   - 设计基于向量相似度的上下文检索系统
   - 规划AI上下文增强功能，实现智能内容关联
   - 计划高级功能如智能问答、内容一致性检查和小说世界知识图谱
+- 开始实现向量化索引与上下文增强系统
+  - 开展向量数据库选型与评估
+  - 设计向量化服务核心架构
+  - 规划文本分块与向量化策略
+  - 设计智能上下文检索与增强系统
+  - 规划Agent框架基础结构
+- 实现内容一致性检查功能
+  - 设计一致性检查规则引擎
+  - 实现基础人物、地点和时间线一致性检查
+  - 规划高级情节逻辑和矛盾检测功能
+  - 设计一致性检查报告与可视化工具
 - 实现富文本编辑器性能优化
   - 添加编辑器工具类，提供性能优化和内容处理功能
   - 实现大型文档分块加载机制，提高加载速度
@@ -210,6 +226,7 @@
   - 改进OpenAI兼容API的模型获取功能
 - 更新1.0.0版本后的功能规划，添加向量化索引和上下文增强相关内容
 - 完善开发步骤文档，添加向量化索引与上下文增强计划
+- 将向量化索引功能从计划步骤移至进行中步骤，细化实现细节和子任务
 - 改进编辑器AI助手的文本选择功能，从Draft.js编辑器直接获取选中文本，而不依赖于DOM选择
 - 优化富文本编辑器性能
   - 改进编辑器状态管理，减少不必要的重渲染
@@ -261,6 +278,8 @@
 - 修复小说页分类和标签展示颜色问题，改进标签文字颜色，确保在彩色背景下可见
 - 修复Ant Design过时API警告，使用新的Tabs组件API，用items属性替代TabPane组件
 - 修复缺失的get-novels-statistics处理程序，添加IPC处理函数，确保Dashboard和StatisticsPage组件能正确获取统计数据
+- 修复"Module not found: Error: Can't resolve 'https'"错误，通过配置Webpack在浏览器环境中使用https-browserify和http-browserify作为polyfill
+- 修复context-search-service.ts中缺少AIScenario导入的问题
 
 ### 删除
 - 无
