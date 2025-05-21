@@ -157,42 +157,54 @@ export class ContextSearchService {
     sourceTypes: string[],
     limit: number
   ): Promise<ContextSearchResult> {
-    // 向量检索当前作为模拟实现
-    // 实际应用需要调用向量数据库进行检索
     console.log(`[ContextSearchService] 执行向量检索: ${query} 在小说 ${novelId}`);
     
-    // 创建一个模拟的搜索请求
-    const searchRequest: VectorSearchRequest = {
-      query,
-      filter: {
-        novelId,
-        sourceType: sourceTypes
-      },
-      topK: limit
-    };
+    // 检查向量嵌入服务是否可用
+    if (!this.embeddingService || !this.embeddingService.isVectorStoreEnabled()) {
+      console.warn('[ContextSearchService] 向量嵌入服务不可用，回退到关键词搜索');
+      return this.performKeywordSearch(query, novelId, sourceTypes, limit);
+    }
     
-    // 如果有向量嵌入服务，使用它创建查询向量
-    // 暂时返回模拟结果
-    return {
-      items: [
-        {
-          id: uuidv4(),
-          type: 'character',
-          title: '模拟人物结果',
-          content: '这是一个与查询相关的人物描述...',
-          relevance: 0.85,
-          novelId
-        },
-        {
-          id: uuidv4(),
-          type: 'location',
-          title: '模拟地点结果',
-          content: '这是一个与查询相关的地点描述...',
-          relevance: 0.78,
-          novelId
-        }
-      ]
-    };
+    try {
+      // 准备过滤条件
+      const filter: Record<string, any> = {
+        novelId: novelId
+      };
+      
+      // 如果有指定源类型，添加到过滤条件
+      if (sourceTypes && sourceTypes.length > 0) {
+        filter.sourceType = sourceTypes;
+      }
+      
+      // 使用向量嵌入服务进行检索
+      const results = await this.embeddingService.querySimilar(
+        query, 
+        filter, 
+        limit,
+        `novel_${novelId}` // 使用小说ID作为集合名前缀
+      );
+      
+      // 将结果转换为上下文搜索结果格式
+      const contextItems = results.map(result => ({
+        id: result.id,
+        type: result.metadata.sourceType,
+        title: result.metadata.title || '未命名',
+        content: result.text,
+        relevance: result.similarity || 0.5,
+        novelId: result.metadata.novelId
+      }));
+      
+      return {
+        items: contextItems,
+        summary: `找到了与"${query}"相关的 ${contextItems.length} 个结果`
+      };
+    } catch (error) {
+      console.error('[ContextSearchService] 向量检索失败:', error);
+      
+      // 如果向量检索失败，回退到关键词搜索
+      console.log('[ContextSearchService] 回退到关键词搜索');
+      return this.performKeywordSearch(query, novelId, sourceTypes, limit);
+    }
   }
   
   /**

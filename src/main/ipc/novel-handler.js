@@ -1398,9 +1398,10 @@ function registerNovelHandlers() {
   });
 }
 
-// 注册所有处理器
+// 立即注册所有处理器
 registerNovelHandlers();
 
 module.exports = {
+  // 导出函数以便需要时重新注册
   registerNovelHandlers
 }; 

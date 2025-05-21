@@ -228,22 +228,36 @@ export enum VectorDBType {
 }
 
 /**
+ * 向量存储类型枚举
+ * 与向量数据库兼容，但表示存储服务而非数据库类型
+ */
+export enum VectorStoreType {
+  CHROMA = 'chroma',
+  MILVUS = 'milvus',
+  PGVECTOR = 'pgvector',
+  SQLITE_VSS = 'sqlite_vss',
+  EMBEDDED = 'embedded'
+}
+
+/**
  * 向量嵌入接口
  */
 export interface VectorEmbedding {
   id: string;
-  vector: number[];       // 向量值
-  text: string;           // 原始文本
-  metadata: {             // 元数据
-    sourceId: string;     // 来源ID (章节ID、角色ID等)
-    sourceType: string;   // 来源类型 (chapter, character, location等)
-    novelId: string;      // 关联的小说ID
-    title?: string;       // 标题
-    createdAt: number;    // 创建时间
-    updatedAt: number;    // 更新时间
-    section?: string;     // 文本在源文档中的位置/区域
+  embedding: number[];       // 向量值（与vector字段等价，同一概念）
+  vector?: number[];         // 向量值（与embedding字段等价，同一概念）
+  text: string;              // 原始文本
+  metadata: {                // 元数据
+    sourceId: string;        // 来源ID (章节ID、角色ID等)
+    sourceType: string;      // 来源类型 (chapter, character, location等)
+    novelId: string;         // 小说ID
+    title?: string;          // 标题
+    createdAt: number;       // 创建时间
+    updatedAt: number;       // 更新时间
+    section?: string;        // 文本在源文档中的位置/区域
     additionalContext?: any; // 其他上下文信息
   };
+  similarity?: number;       // 相似度分数（仅用于向量检索结果）
 }
 
 /**

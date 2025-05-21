@@ -1,6 +1,11 @@
 const { ipcMain } = require('electron');
 const dbManager = require('../database/db-manager');
 
+// 检查处理器是否已注册的辅助函数
+function isHandlerRegistered(channel) {
+  return ipcMain.listeners(channel).length > 0;
+}
+
 /**
  * 初始化统计分析相关的IPC处理器
  */
@@ -11,52 +16,41 @@ function initStatisticsHandlers() {
    * 获取总体统计数据
    * 包括总字数、小说数量、章节数量等
    */
-  ipcMain.handle('get-overall-statistics', async () => {
-    console.log('处理get-overall-statistics请求');
-    try {
-      await dbManager.waitForInitialization();
-      
-      // 获取小说总数
-      const novelCountResult = await dbManager.get('SELECT COUNT(*) as count FROM novels');
-      const novelCount = novelCountResult ? novelCountResult.count : 0;
-      
-      // 获取章节总数
-      const chapterCountResult = await dbManager.get('SELECT COUNT(*) as count FROM chapters');
-      const chapterCount = chapterCountResult ? chapterCountResult.count : 0;
-      
-      // 获取总字数
-      const wordCountResult = await dbManager.get('SELECT SUM(word_count) as total FROM chapters');
-      const totalWordCount = wordCountResult && wordCountResult.total ? wordCountResult.total : 0;
-      
-      // 获取人物总数
-      const characterCountResult = await dbManager.get('SELECT COUNT(*) as count FROM characters');
-      const characterCount = characterCountResult ? characterCountResult.count : 0;
-      
-      // 获取地点总数
-      const locationCountResult = await dbManager.get('SELECT COUNT(*) as count FROM locations');
-      const locationCount = locationCountResult ? locationCountResult.count : 0;
-      
-      // 获取大纲项总数
-      const outlineCountResult = await dbManager.get('SELECT COUNT(*) as count FROM outlines');
-      const outlineCount = outlineCountResult ? outlineCountResult.count : 0;
-      
-      // 获取时间线事件总数
-      const timelineCountResult = await dbManager.get('SELECT COUNT(*) as count FROM timeline_events');
-      const timelineCount = timelineCountResult ? timelineCountResult.count : 0;
-      
-      console.log('成功获取统计数据:', {
-        novelCount,
-        chapterCount,
-        totalWordCount,
-        characterCount,
-        locationCount,
-        outlineCount,
-        timelineCount
-      });
-      
-      return {
-        success: true,
-        data: {
+  if (!isHandlerRegistered('get-overall-statistics')) {
+    ipcMain.handle('get-overall-statistics', async () => {
+      console.log('处理get-overall-statistics请求');
+      try {
+        await dbManager.waitForInitialization();
+        
+        // 获取小说总数
+        const novelCountResult = await dbManager.get('SELECT COUNT(*) as count FROM novels');
+        const novelCount = novelCountResult ? novelCountResult.count : 0;
+        
+        // 获取章节总数
+        const chapterCountResult = await dbManager.get('SELECT COUNT(*) as count FROM chapters');
+        const chapterCount = chapterCountResult ? chapterCountResult.count : 0;
+        
+        // 获取总字数
+        const wordCountResult = await dbManager.get('SELECT SUM(word_count) as total FROM chapters');
+        const totalWordCount = wordCountResult && wordCountResult.total ? wordCountResult.total : 0;
+        
+        // 获取人物总数
+        const characterCountResult = await dbManager.get('SELECT COUNT(*) as count FROM characters');
+        const characterCount = characterCountResult ? characterCountResult.count : 0;
+        
+        // 获取地点总数
+        const locationCountResult = await dbManager.get('SELECT COUNT(*) as count FROM locations');
+        const locationCount = locationCountResult ? locationCountResult.count : 0;
+        
+        // 获取大纲项总数
+        const outlineCountResult = await dbManager.get('SELECT COUNT(*) as count FROM outlines');
+        const outlineCount = outlineCountResult ? outlineCountResult.count : 0;
+        
+        // 获取时间线事件总数
+        const timelineCountResult = await dbManager.get('SELECT COUNT(*) as count FROM timeline_events');
+        const timelineCount = timelineCountResult ? timelineCountResult.count : 0;
+        
+        console.log('成功获取统计数据:', {
           novelCount,
           chapterCount,
           totalWordCount,
@@ -64,16 +58,29 @@ function initStatisticsHandlers() {
           locationCount,
           outlineCount,
           timelineCount
-        }
-      };
-    } catch (error) {
-      console.error('获取统计数据失败:', error);
-      return { 
-        success: false, 
-        error: `获取统计数据失败: ${error.message}` 
-      };
-    }
-  });
+        });
+        
+        return {
+          success: true,
+          data: {
+            novelCount,
+            chapterCount,
+            totalWordCount,
+            characterCount,
+            locationCount,
+            outlineCount,
+            timelineCount
+          }
+        };
+      } catch (error) {
+        console.error('获取统计数据失败:', error);
+        return { 
+          success: false, 
+          error: `获取统计数据失败: ${error.message}` 
+        };
+      }
+    });
+  }
 
   /**
    * 获取小说写作进度统计
@@ -201,63 +208,65 @@ function initStatisticsHandlers() {
    * 获取写作活动统计
    * 返回过去30天每天的写作字数
    */
-  ipcMain.handle('get-writing-activity', async () => {
-    console.log('处理get-writing-activity请求');
-    try {
-      await dbManager.waitForInitialization();
-      
-      // 获取过去30天的日期
-      const dates = [];
-      const today = new Date();
-      for (let i = 29; i >= 0; i--) {
-        const date = new Date(today);
-        date.setDate(today.getDate() - i);
-        const dateString = date.toISOString().split('T')[0];
-        dates.push(dateString);
+  if (!isHandlerRegistered('get-writing-activity')) {
+    ipcMain.handle('get-writing-activity', async () => {
+      console.log('处理get-writing-activity请求');
+      try {
+        await dbManager.waitForInitialization();
+        
+        // 获取过去30天的日期
+        const dates = [];
+        const today = new Date();
+        for (let i = 29; i >= 0; i--) {
+          const date = new Date(today);
+          date.setDate(today.getDate() - i);
+          const dateString = date.toISOString().split('T')[0];
+          dates.push(dateString);
+        }
+        
+        // 查询每天的写作字数
+        const query = `
+          SELECT 
+            DATE(updated_at) AS date,
+            SUM(word_count) AS daily_words
+          FROM 
+            chapters
+          WHERE 
+            updated_at >= DATE('now', '-30 days')
+          GROUP BY 
+            DATE(updated_at)
+          ORDER BY 
+            date ASC
+        `;
+        
+        const activityData = await dbManager.query(query);
+        
+        // 将数据转换为日期映射
+        const activityMap = {};
+        activityData.forEach(item => {
+          activityMap[item.date] = item.daily_words;
+        });
+        
+        // 生成完整的30天数据
+        const dailyActivity = dates.map(date => ({
+          date,
+          wordCount: activityMap[date] || 0
+        }));
+        
+        console.log(`成功获取过去30天的写作活动数据`);
+        return {
+          success: true,
+          data: dailyActivity
+        };
+      } catch (error) {
+        console.error('获取写作活动统计失败:', error);
+        return { 
+          success: false, 
+          error: `获取写作活动统计失败: ${error.message}` 
+        };
       }
-      
-      // 查询每天的写作字数
-      const query = `
-        SELECT 
-          DATE(updated_at) AS date,
-          SUM(word_count) AS daily_words
-        FROM 
-          chapters
-        WHERE 
-          updated_at >= DATE('now', '-30 days')
-        GROUP BY 
-          DATE(updated_at)
-        ORDER BY 
-          date ASC
-      `;
-      
-      const activityData = await dbManager.query(query);
-      
-      // 将数据转换为日期映射
-      const activityMap = {};
-      activityData.forEach(item => {
-        activityMap[item.date] = item.daily_words;
-      });
-      
-      // 生成完整的30天数据
-      const dailyActivity = dates.map(date => ({
-        date,
-        wordCount: activityMap[date] || 0
-      }));
-      
-      console.log(`成功获取过去30天的写作活动数据`);
-      return {
-        success: true,
-        data: dailyActivity
-      };
-    } catch (error) {
-      console.error('获取写作活动统计失败:', error);
-      return { 
-        success: false, 
-        error: `获取写作活动统计失败: ${error.message}` 
-      };
-    }
-  });
+    });
+  }
 
   /**
    * 获取单个小说的详细统计
@@ -360,6 +369,68 @@ function initStatisticsHandlers() {
       };
     }
   });
+
+  /**
+   * 获取写作时间统计
+   * 返回写作总时间（分钟）
+   */
+  if (!isHandlerRegistered('get-writing-time')) {
+    ipcMain.handle('get-writing-time', async () => {
+      console.log('处理get-writing-time请求');
+      try {
+        await dbManager.waitForInitialization();
+        
+        // 查询写作时间记录
+        // 注意：这个查询假设有一个writing_sessions表存储写作会话信息
+        // 如果没有这个表，我们返回一个估算值或默认值
+        let totalMinutes = 0;
+        
+        try {
+          // 检查writing_sessions表是否存在
+          const tableExists = await dbManager.get(`
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='writing_sessions'
+          `);
+          
+          if (tableExists) {
+            // 如果表存在，查询写作时间
+            const timeQuery = `
+              SELECT SUM(duration_minutes) AS total_minutes
+              FROM writing_sessions
+            `;
+            
+            const result = await dbManager.get(timeQuery);
+            totalMinutes = result && result.total_minutes ? result.total_minutes : 0;
+          } else {
+            // 如果表不存在，使用章节数量进行估算（假设每章平均30分钟）
+            const chaptersQuery = `SELECT COUNT(*) AS count FROM chapters`;
+            const result = await dbManager.get(chaptersQuery);
+            totalMinutes = result && result.count ? result.count * 30 : 0;
+          }
+        } catch (error) {
+          console.error('查询写作时间失败，使用估算值:', error);
+          // 如果查询失败，使用章节数量进行估算
+          const chaptersQuery = `SELECT COUNT(*) AS count FROM chapters`;
+          const result = await dbManager.get(chaptersQuery);
+          totalMinutes = result && result.count ? result.count * 30 : 0;
+        }
+        
+        console.log(`成功获取写作时间统计: ${totalMinutes}分钟`);
+        return {
+          success: true,
+          data: {
+            totalMinutes
+          }
+        };
+      } catch (error) {
+        console.error('获取写作时间统计失败:', error);
+        return { 
+          success: false, 
+          error: `获取写作时间统计失败: ${error.message}` 
+        };
+      }
+    });
+  }
 
   console.log('统计分析IPC处理器已注册完成');
 }

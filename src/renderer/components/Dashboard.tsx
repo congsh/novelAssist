@@ -39,35 +39,45 @@ const Dashboard: React.FC = () => {
           
           // 计算统计数据
           const totalNovels = novels.length;
-          
-          // 获取写作活动数据，用于计算今日字数
-          const activityResponse = await window.electron.invoke('get-writing-activity');
           let todayWords = 0;
           let totalWords = 0;
           
-          if (activityResponse.success) {
-            const activityData = activityResponse.data;
-            // 获取今天的数据
-            const today = new Date().toISOString().split('T')[0];
-            const todayData = activityData.find((item: any) => item.date === today);
-            todayWords = todayData ? todayData.wordCount : 0;
-            
-            // 获取总字数（从章节统计，更准确）
-            const statsResponse = await window.electron.invoke('get-novels-statistics');
-            if (statsResponse.success) {
-              totalWords = statsResponse.data.reduce(
-                (sum: number, novel: any) => sum + (novel.currentWordCount || 0), 
-                0
-              );
-            } else {
-              // 如果获取失败，使用小说表中的字数（可能不准确）
-              totalWords = novels.reduce(
-                (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
-                0
-              );
+          try {
+            // 尝试获取写作活动数据，用于计算今日字数
+            const activityResponse = await window.electron.invoke('get-writing-activity');
+            if (activityResponse.success) {
+              const activityData = activityResponse.data;
+              // 获取今天的数据
+              const today = new Date().toISOString().split('T')[0];
+              const todayData = activityData.find((item: any) => item.date === today);
+              todayWords = todayData ? todayData.wordCount : 0;
+              
+              // 尝试获取总字数（从章节统计，更准确）
+              try {
+                const statsResponse = await window.electron.invoke('get-novels-statistics');
+                if (statsResponse.success) {
+                  totalWords = statsResponse.data.reduce(
+                    (sum: number, novel: any) => sum + (novel.currentWordCount || 0), 
+                    0
+                  );
+                } else {
+                  // 如果获取失败，使用小说表中的字数
+                  totalWords = novels.reduce(
+                    (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
+                    0
+                  );
+                }
+              } catch (statsError) {
+                console.log('获取小说统计数据失败，使用小说表中的字数');
+                totalWords = novels.reduce(
+                  (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
+                  0
+                );
+              }
             }
-          } else {
-            // 如果获取失败，使用小说表中的字数
+          } catch (activityError) {
+            console.log('获取写作活动数据失败，使用小说表中的字数');
+            // 如果API不存在或失败，直接使用小说表中的字数统计
             totalWords = novels.reduce(
               (sum: number, novel: Novel) => sum + (novel.word_count || 0), 
               0
@@ -82,8 +92,7 @@ const Dashboard: React.FC = () => {
               writingTime = timeResponse.data.totalMinutes || 0;
             }
           } catch (error) {
-            console.log('获取写作时间功能未实现');
-            writingTime = 0;
+            console.log('获取写作时间功能未实现，默认为0');
           }
           
           setStats({
@@ -102,6 +111,15 @@ const Dashboard: React.FC = () => {
           console.error('错误详情:', error.message);
           console.error('错误堆栈:', error.stack);
         }
+        
+        // 错误时显示空数据
+        setRecentNovels([]);
+        setStats({
+          totalNovels: 0,
+          totalWords: 0,
+          todayWords: 0,
+          writingTime: 0
+        });
       } finally {
         setLoading(false);
       }

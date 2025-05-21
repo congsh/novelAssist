@@ -20,6 +20,9 @@ if (process.platform === 'win32') {
   }
 }
 
+// 引入向量数据库管理器
+const { vectorManager } = require('./database/vector/vector-manager');
+
 /**
  * 创建主窗口
  */
@@ -147,34 +150,42 @@ function createWindow() {
 /**
  * 应用就绪后创建窗口
  */
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   createWindow();
 
   // 初始化数据库连接
   require('./database/db-manager');
   
-  // 加载IPC处理器
+  // 初始化向量数据库管理器
+  try {
+    logger.info('正在初始化向量数据库管理器...');
+    await vectorManager.initialize();
+    logger.info('向量数据库管理器初始化成功');
+  } catch (error) {
+    logger.error('向量数据库管理器初始化失败:', error);
+    // 向量数据库初始化失败不影响应用其他功能的使用
+  }
+  
+  // 加载IPC处理器 - 这些模块会自动注册处理器
   require('./ipc/novel-handler');
   require('./ipc/ai-handler');
   require('./ipc/location-handler');
   require('./ipc/outline-handler');
 
-  // 加载人物和时间线IPC处理器
+  // 初始化其他IPC处理器
   const { initCharacterHandlers } = require('./ipc/character-handler');
   const { initTimelineHandlers } = require('./ipc/timeline-handler');
   const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
   const { initBackupHandlers } = require('./ipc/backup-handler');
   const { initStatisticsHandlers } = require('./ipc/statistics-handler');
-  const { registerAIHandlers } = require('./ipc/ai-handler');
   const { registerSettingsHandlers } = require('./ipc/settings-handler');
 
-  // 初始化人物和时间线IPC处理器
+  // 分别初始化各模块处理器
   initCharacterHandlers();
   initTimelineHandlers();
   initNovelAssociationHandlers();
   initBackupHandlers();
   initStatisticsHandlers();
-  registerAIHandlers();
   registerSettingsHandlers();
 
   // 设置应用菜单
@@ -192,6 +203,20 @@ app.whenReady().then(() => {
  */
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
+});
+
+/**
+ * 应用退出前关闭服务
+ */
+app.on('before-quit', async (event) => {
+  // 关闭向量数据库服务
+  try {
+    logger.info('正在关闭向量数据库服务...');
+    await vectorManager.shutdown();
+    logger.info('向量数据库服务已关闭');
+  } catch (error) {
+    logger.error('关闭向量数据库服务失败:', error);
+  }
 });
 
 /**

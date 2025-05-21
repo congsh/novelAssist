@@ -1,10 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
+import { ipcRenderer } from 'electron';
 import { 
   AISettings, 
   AIProviderType,
   EmbeddingRequest, 
   EmbeddingResponse,
-  VectorEmbedding 
+  VectorEmbedding,
+  VectorStoreType
 } from '../types';
 import { aiServiceManager } from './ai-service-manager';
 import { AIRequestQueue } from './ai-request-queue';
@@ -13,6 +15,7 @@ import { AIBaseService } from './ai-base-service';
 /**
  * 向量嵌入服务
  * 提供文本向量化功能，支持使用不同的模型和服务进行文本嵌入
+ * 添加对向量数据库的支持，可保存和检索向量
  */
 export class VectorEmbeddingService {
   private serviceManager: typeof aiServiceManager;
@@ -21,6 +24,8 @@ export class VectorEmbeddingService {
   private embeddingCache: Map<string, EmbeddingResponse> = new Map();
   private cacheKeyPrefix = 'embed_';
   private maxCacheSize = 1000; // 最大缓存数量
+  private vectorStoreEnabled = false; // 是否启用向量存储
+  private vectorStoreType: VectorStoreType = VectorStoreType.CHROMA; // 向量存储类型
   
   constructor(serviceManager: typeof aiServiceManager, requestQueue: AIRequestQueue) {
     this.serviceManager = serviceManager;
@@ -33,7 +38,33 @@ export class VectorEmbeddingService {
    */
   public async initialize(settings: AISettings): Promise<boolean> {
     this.settings = settings;
+    
+    // 检查向量数据库是否可用
+    try {
+      // 使用IPC调用主进程检查向量数据库是否可用
+      const collections = await ipcRenderer.invoke('vector:list-collections');
+      console.log('[VectorEmbeddingService] 向量数据库可用，已加载集合:', collections);
+      this.vectorStoreEnabled = true;
+    } catch (error) {
+      console.warn('[VectorEmbeddingService] 向量数据库不可用:', error);
+      this.vectorStoreEnabled = false;
+    }
+    
     return true;
+  }
+  
+  /**
+   * 检查向量存储是否可用
+   */
+  public isVectorStoreEnabled(): boolean {
+    return this.vectorStoreEnabled;
+  }
+  
+  /**
+   * 获取向量存储类型
+   */
+  public getVectorStoreType(): VectorStoreType {
+    return this.vectorStoreType;
   }
   
   /**
@@ -368,5 +399,223 @@ export class VectorEmbeddingService {
    */
   public clearCache(): void {
     this.embeddingCache.clear();
+  }
+  
+  /**
+   * 将向量保存到向量数据库
+   * 
+   * @param vectorEmbedding 向量嵌入对象
+   * @param collectionName 集合名称
+   */
+  public async saveToVectorStore(
+    vectorEmbedding: VectorEmbedding, 
+    collectionName: string = 'default'
+  ): Promise<boolean> {
+    if (!this.vectorStoreEnabled) {
+      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      return false;
+    }
+    
+    try {
+      // 使用IPC调用主进程保存向量
+      await ipcRenderer.invoke('vector:create-embedding', {
+        id: vectorEmbedding.id,
+        text: vectorEmbedding.text,
+        metadata: vectorEmbedding.metadata,
+        collectionName
+      });
+      
+      console.log(`[VectorEmbeddingService] 向量已保存到集合 ${collectionName}`);
+      return true;
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 保存向量失败:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 批量将向量保存到向量数据库
+   * 
+   * @param vectorEmbeddings 向量嵌入对象数组
+   * @param collectionName 集合名称
+   */
+  public async saveToVectorStoreBatch(
+    vectorEmbeddings: VectorEmbedding[], 
+    collectionName: string = 'default'
+  ): Promise<boolean> {
+    if (!this.vectorStoreEnabled) {
+      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      return false;
+    }
+    
+    try {
+      // 准备批量保存的数据
+      const ids = vectorEmbeddings.map(ve => ve.id);
+      const texts = vectorEmbeddings.map(ve => ve.text);
+      const metadatas = vectorEmbeddings.map(ve => ve.metadata);
+      
+      // 使用IPC调用主进程批量保存向量
+      await ipcRenderer.invoke('vector:create-embedding-batch', {
+        ids,
+        texts,
+        metadatas,
+        collectionName
+      });
+      
+      console.log(`[VectorEmbeddingService] 已批量保存${ids.length}个向量到集合 ${collectionName}`);
+      return true;
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 批量保存向量失败:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 从向量数据库检索相似向量
+   * 
+   * @param queryText 查询文本
+   * @param filter 过滤条件
+   * @param limit 结果数量限制
+   * @param collectionName 集合名称
+   */
+  public async querySimilar(
+    queryText: string,
+    filter: Record<string, any> = {},
+    limit: number = 5,
+    collectionName: string = 'default'
+  ): Promise<VectorEmbedding[]> {
+    if (!this.vectorStoreEnabled) {
+      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      return [];
+    }
+    
+    try {
+      // 使用IPC调用主进程查询相似向量
+      const results = await ipcRenderer.invoke('vector:query-similar', {
+        queryText,
+        filter,
+        limit,
+        collectionName
+      });
+      
+      // 将结果转换为VectorEmbedding对象
+      return results.map((result: any) => ({
+        id: result.id,
+        text: result.text,
+        metadata: result.metadata || {},
+        embedding: [], // 通常不需要返回具体的向量值
+        similarity: 1 - (result.distance || 0) // 距离转换为相似度
+      }));
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 查询相似向量失败:', error);
+      return [];
+    }
+  }
+  
+  /**
+   * 从向量数据库删除向量
+   * 
+   * @param ids 向量ID数组
+   * @param collectionName 集合名称
+   */
+  public async deleteFromVectorStore(
+    ids: string[],
+    collectionName: string = 'default'
+  ): Promise<boolean> {
+    if (!this.vectorStoreEnabled) {
+      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      return false;
+    }
+    
+    try {
+      // 使用IPC调用主进程删除向量
+      await ipcRenderer.invoke('vector:delete-by-ids', {
+        ids,
+        collectionName
+      });
+      
+      console.log(`[VectorEmbeddingService] 已从集合 ${collectionName} 删除 ${ids.length} 个向量`);
+      return true;
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 删除向量失败:', error);
+      return false;
+    }
+  }
+  
+  /**
+   * 创建向量嵌入对象并保存到向量数据库
+   * 
+   * @param text 文本内容
+   * @param modelId 模型ID
+   * @param metadata 元数据
+   * @param collectionName 集合名称
+   */
+  public async createAndSaveVectorEmbedding(
+    text: string,
+    modelId: string,
+    metadata: VectorEmbedding['metadata'] = {},
+    collectionName: string = 'default'
+  ): Promise<VectorEmbedding | null> {
+    try {
+      // 生成文本的向量嵌入
+      const embeddingResponse = await this.createEmbedding({ text, modelId });
+      
+      // 创建向量嵌入对象
+      const vectorEmbedding = this.createVectorEmbedding(
+        text,
+        embeddingResponse.embedding,
+        metadata
+      );
+      
+      // 保存到向量数据库
+      if (this.vectorStoreEnabled) {
+        await this.saveToVectorStore(vectorEmbedding, collectionName);
+      }
+      
+      return vectorEmbedding;
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 创建并保存向量嵌入失败:', error);
+      return null;
+    }
+  }
+  
+  /**
+   * 批量创建向量嵌入对象并保存到向量数据库
+   * 
+   * @param texts 文本内容数组
+   * @param modelId 模型ID
+   * @param metadatas 元数据数组
+   * @param collectionName 集合名称
+   */
+  public async createAndSaveVectorEmbeddingBatch(
+    texts: string[],
+    modelId: string,
+    metadatas: VectorEmbedding['metadata'][] = [],
+    collectionName: string = 'default'
+  ): Promise<VectorEmbedding[]> {
+    try {
+      // 生成文本的向量嵌入
+      const embeddingResponses = await this.createEmbeddingBatch(texts, modelId);
+      
+      // 创建向量嵌入对象
+      const vectorEmbeddings = embeddingResponses.map((response, index) => {
+        const metadata = metadatas.length > index ? metadatas[index] : {};
+        return this.createVectorEmbedding(
+          texts[index],
+          response.embedding,
+          metadata
+        );
+      });
+      
+      // 保存到向量数据库
+      if (this.vectorStoreEnabled && vectorEmbeddings.length > 0) {
+        await this.saveToVectorStoreBatch(vectorEmbeddings, collectionName);
+      }
+      
+      return vectorEmbeddings;
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 批量创建并保存向量嵌入失败:', error);
+      return [];
+    }
   }
 } 
