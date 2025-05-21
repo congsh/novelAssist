@@ -5,6 +5,9 @@ const fs = require('fs');
 const logger = require('./utils/logger');
 const isDev = process.env.NODE_ENV === 'development';
 
+// 处理命令行参数
+const openDevTools = process.argv.includes('--dev-tools');
+
 // 设置控制台编码为UTF-8
 process.env.LANG = 'zh_CN.UTF-8';
 process.env.LC_ALL = 'zh_CN.UTF-8';
@@ -85,7 +88,7 @@ function createWindow() {
   }
 
   // 开发环境下打开DevTools
-  if (process.env.NODE_ENV === 'development') {
+  if (process.env.NODE_ENV === 'development' || openDevTools) {
     mainWindow.webContents.openDevTools();
     logger.info(`开发环境：加载URL - ${startUrl}`);
   } else {
@@ -201,8 +204,17 @@ app.whenReady().then(async () => {
 /**
  * 所有窗口关闭时退出应用
  */
-app.on('window-all-closed', function () {
-  if (process.platform !== 'darwin') app.quit();
+app.on('window-all-closed', async function () {
+  if (process.platform !== 'darwin') {
+    try {
+      logger.info('所有窗口关闭，正在关闭向量数据库服务...');
+      await vectorManager.shutdown();
+      logger.info('向量数据库服务已关闭');
+    } catch (error) {
+      logger.error('所有窗口关闭时关闭向量数据库服务失败:', error);
+    }
+    app.quit();
+  }
 });
 
 /**

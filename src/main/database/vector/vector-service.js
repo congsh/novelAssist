@@ -251,15 +251,93 @@ class VectorService {
   stopPythonProcess() {
     if (this.pythonProcess) {
       try {
+        const pid = this.pythonProcess.pid;
+        logger.info(`正在终止Python进程，PID: ${pid}`);
+        
         if (process.platform === 'win32') {
           // Windows平台使用taskkill强制终止进程树
-          spawn('taskkill', ['/pid', String(this.pythonProcess.pid), '/f', '/t']);
+          const taskkill = spawn('taskkill', ['/pid', String(pid), '/f', '/t']);
+          
+          // 输出taskkill的结果
+          taskkill.stdout.on('data', (data) => {
+            logger.info(`taskkill输出: ${data.toString().trim()}`);
+          });
+          
+          taskkill.stderr.on('data', (data) => {
+            logger.error(`taskkill错误: ${data.toString().trim()}`);
+          });
+          
+          // 确保taskkill执行完毕
+          taskkill.on('close', (code) => {
+            logger.info(`taskkill进程退出，退出码: ${code}`);
+            
+            // 额外检查：确保没有相同端口的进程残留
+            try {
+              const { exec } = require('child_process');
+              exec(`netstat -ano | findstr :${this.actualPort}`, (error, stdout, stderr) => {
+                if (error) {
+                  logger.debug(`检查端口占用出错: ${error.message}`);
+                  return;
+                }
+                
+                if (stderr) {
+                  logger.debug(`检查端口占用stderr: ${stderr}`);
+                }
+                
+                if (stdout && stdout.includes(`:${this.actualPort}`)) {
+                  logger.warn(`端口 ${this.actualPort} 仍被占用，尝试进一步清理...`);
+                  
+                  // 提取PID并尝试杀死进程
+                  const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
+                  if (pidMatch && pidMatch[1]) {
+                    const remainingPid = pidMatch[1].trim();
+                    logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
+                    
+                    exec(`taskkill /F /PID ${remainingPid} /T`, (err, out) => {
+                      if (err) {
+                        logger.error(`杀死残留进程失败: ${err.message}`);
+                      } else {
+                        logger.info(`已杀死残留进程: ${out.trim()}`);
+                      }
+                    });
+                  }
+                }
+              });
+            } catch (error) {
+              logger.error('检查端口占用失败:', error);
+            }
+          });
+          
+          // 也尝试直接杀死进程，以防taskkill不成功
+          try {
+            this.pythonProcess.kill('SIGKILL');
+          } catch (e) {
+            logger.debug('直接杀死进程可能失败，这是正常的:', e.message);
+          }
         } else {
-          // Unix平台可以直接kill
+          // Unix平台先尝试SIGTERM，如果失败再尝试SIGKILL
           this.pythonProcess.kill('SIGTERM');
+          
+          // 给进程一些时间来优雅地退出
+          setTimeout(() => {
+            try {
+              // 检查进程是否还在运行
+              const running = this.pythonProcess && this.pythonProcess.exitCode === null;
+              if (running) {
+                logger.warn('进程未响应SIGTERM，尝试SIGKILL...');
+                this.pythonProcess.kill('SIGKILL');
+              }
+            } catch (e) {
+              logger.debug('进程可能已经退出:', e.message);
+            }
+          }, 1000);
         }
+        
+        // 无论成功与否，都将引用置空
+        this.pythonProcess = null;
       } catch (error) {
         logger.error('终止Python进程失败:', error);
+        this.pythonProcess = null;
       }
     }
   }
@@ -269,8 +347,44 @@ class VectorService {
    */
   async stop() {
     if (this.pythonProcess) {
+      // 保存当前端口号，以便后续检查
+      const port = this.actualPort;
+      
+      // 停止Python进程
       this.stopPythonProcess();
       this.ready = false;
+      
+      // 等待一段时间确保进程完全退出
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // 额外检查：确保端口已释放
+      try {
+        const { exec } = require('child_process');
+        exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+          // 忽略错误，因为可能是因为没有找到匹配项
+          if (stdout && stdout.includes(`:${port}`)) {
+            logger.warn(`停止服务后端口 ${port} 仍被占用，尝试额外清理...`);
+            
+            // 提取PID并尝试杀死进程
+            const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
+            if (pidMatch && pidMatch[1]) {
+              const remainingPid = pidMatch[1].trim();
+              logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
+              
+              exec(`taskkill /F /PID ${remainingPid} /T`, (err, out) => {
+                if (err) {
+                  logger.error(`杀死残留进程失败: ${err.message}`);
+                } else {
+                  logger.info(`已杀死残留进程: ${out.trim()}`);
+                }
+              });
+            }
+          }
+        });
+      } catch (error) {
+        logger.error('检查端口占用失败:', error);
+      }
+      
       logger.info('向量数据库服务已停止');
     }
   }
@@ -405,7 +519,7 @@ class VectorService {
     try {
       const data = { where };
       await this.httpRequest(`/delete?collection_name=${collectionName}`, 'POST', data);
-      logger.debug(`已删除符合条件的embeddings, 集合: ${collectionName}`);
+      logger.debug(`已通过条件删除向量, 集合: ${collectionName}`);
     } catch (error) {
       logger.error(`通过条件删除向量失败, 集合: ${collectionName}:`, error);
       throw error;
@@ -428,4 +542,4 @@ class VectorService {
   }
 }
 
-module.exports = { VectorService }; 
+module.exports = { VectorService };
