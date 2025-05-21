@@ -15,33 +15,59 @@ import { LMStudioService } from './lmstudio-service';
 import { OpenAICompatibleService } from './openai-compatible-service';
 import { ChatService } from './chat-service';
 import { AIEditorService } from './ai-editor-service';
+import { ConsistencyCheckService } from './consistency-check-service';
+import { ContextSearchService } from './context-search-service';
+import { VectorEmbeddingService } from './vector-embedding-service';
 
 // 准备添加的向量化服务 (待实现)
 // import { VectorEmbeddingService } from './vector-embedding-service';
 // import { VectorSearchService } from './vector-search-service';
 // import { ContextEnhancementService } from './context-enhancement-service';
 // import { ConsistencyCheckService } from './consistency-check-service';
+
+// 获取单例实例
+const aiRequestQueue = new AIRequestQueue();
+const aiSettingsService = AISettingsService.getInstance();
+const chatContextManager = new ChatContextManager();
+const vectorEmbeddingService = new VectorEmbeddingService(aiServiceManager, aiRequestQueue);
+
+// 创建依赖于其他服务的服务实例
+const chatService = ChatService.getInstance();
+const aiEditorService = new AIEditorService();
+const consistencyCheckService = new ConsistencyCheckService(aiServiceManager, chatService);
+const contextSearchService = new ContextSearchService(aiServiceManager, vectorEmbeddingService, chatService);
+
+// 初始化依赖服务
+const initializeAIServices = async () => {
+  const settings = await aiSettingsService.loadSettings();
+  
+  // 初始化服务
+  if (settings) {
+    await aiServiceManager.initialize(settings);
+    await vectorEmbeddingService.initialize(settings);
+    await chatService.initialize();
+    await contextSearchService.initialize();
+  }
+  
+  return !!settings;
+};
+
 export {
   aiServiceManager,
-  AISettingsService,
-  AIRequestQueue,
-  ChatContextManager,
-
-  // 提供商服务
-  OpenAIService,
-  OllamaService,
-  DeepSeekService,
-  LMStudioService,
-  OpenAICompatibleService,
-
-  // 聊天和编辑器服务
-  ChatService,
-  AIEditorService
+  aiRequestQueue,
+  aiSettingsService,
+  chatContextManager,
+  chatService,
+  aiEditorService,
+  vectorEmbeddingService,
+  consistencyCheckService,
+  contextSearchService,
+  initializeAIServices
 };
-  export type {
-    // 基础服务
-    AIBaseService
-  };
+export type {
+  // 基础服务
+  AIBaseService
+};
 
 // 默认导出服务管理器
 export default aiServiceManager;

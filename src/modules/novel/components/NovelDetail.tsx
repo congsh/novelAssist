@@ -51,6 +51,7 @@ import {
 import type { DataNode, TreeProps } from 'antd/es/tree';
 import { novelAssociationService } from '../services/novelAssociationService';
 import { characterService } from '../../character/services/characterService';
+import { chapterVectorizationService } from '../services/index';
 
 const { Title, Paragraph } = Typography;
 const { TextArea } = Input;
@@ -194,6 +195,7 @@ const NovelDetail: React.FC = () => {
   const [statisticsLoading, setStatisticsLoading] = useState<boolean>(false);
   const [statistics, setStatistics] = useState<any>(null);
   const [backupLoading, setBackupLoading] = useState<boolean>(false);
+  const [vectorizeLoading, setVectorizeLoading] = useState<boolean>(false);
 
   // 加载小说详情
   const loadNovelData = async () => {
@@ -441,6 +443,44 @@ const NovelDetail: React.FC = () => {
       appMessage.error('创建备份失败，请稍后重试');
     } finally {
       setBackupLoading(false);
+    }
+  };
+
+  // 向量化小说所有章节
+  const handleVectorizeChapters = async () => {
+    if (!id) return;
+    
+    setVectorizeLoading(true);
+    try {
+      // 显示确认对话框
+      modal.confirm({
+        title: '向量化小说章节',
+        content: '该操作将对小说的所有章节进行向量化处理，用于AI创作辅助和相似内容搜索。处理过程可能需要一些时间，确定继续吗？',
+        okText: '确定',
+        cancelText: '取消',
+        onOk: async () => {
+          try {
+            const success = await chapterVectorizationService.vectorizeNovelChapters(id);
+            if (success) {
+              appMessage.success('章节向量化完成');
+            } else {
+              appMessage.error('章节向量化失败');
+            }
+          } catch (error) {
+            console.error('章节向量化出错:', error);
+            appMessage.error('章节向量化出错');
+          } finally {
+            setVectorizeLoading(false);
+          }
+        },
+        onCancel: () => {
+          setVectorizeLoading(false);
+        }
+      });
+    } catch (error) {
+      console.error('向量化章节出错:', error);
+      appMessage.error('向量化章节出错');
+      setVectorizeLoading(false);
     }
   };
 
@@ -1707,26 +1747,104 @@ const NovelDetail: React.FC = () => {
     );
   }
 
+  // 渲染顶部操作按钮
+  const renderActions = () => {
+    return (
+      <Space>
+        <Button
+          icon={<ArrowLeftOutlined />}
+          onClick={() => navigate('/novels')}
+        >
+          返回列表
+        </Button>
+        <Button
+          type="primary"
+          icon={<EditOutlined />}
+          onClick={showEditModal}
+        >
+          编辑小说
+        </Button>
+        <Button 
+          icon={<CloudUploadOutlined />} 
+          onClick={handleVectorizeChapters}
+          loading={vectorizeLoading}
+        >
+          向量化章节
+        </Button>
+        <Dropdown menu={{ items: exportMenuItems }}>
+          <Button icon={<ExportOutlined />} loading={exportLoading}>
+            导出 <DownOutlined />
+          </Button>
+        </Dropdown>
+        <Button 
+          icon={<DeleteOutlined />} 
+          danger
+          onClick={handleDelete}
+        >
+          删除
+        </Button>
+      </Space>
+    );
+  };
+
+  /**
+   * 删除小说
+   */
+  const handleDelete = async () => {
+    if (!id) return;
+    
+    modal.confirm({
+      title: '确认删除',
+      content: '确定要删除这本小说吗？此操作不可恢复。',
+      okText: '删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const response = await window.electron.invoke('delete-novel', { id });
+          if (response.success) {
+            appMessage.success('小说已删除');
+            navigate('/novels');
+          } else {
+            appMessage.error(response.error || '删除小说失败');
+          }
+        } catch (error) {
+          console.error('删除小说失败:', error);
+          appMessage.error('删除小说失败');
+        }
+      }
+    });
+  };
+
+  // 导出菜单项
+  const exportMenuItems = [
+    {
+      key: 'epub',
+      label: '导出为EPUB',
+      onClick: () => handleExportNovel('epub'),
+    },
+    {
+      key: 'pdf',
+      label: '导出为PDF',
+      onClick: () => handleExportNovel('pdf'),
+    },
+    {
+      key: 'docx',
+      label: '导出为Word文档',
+      onClick: () => handleExportNovel('docx'),
+    },
+    {
+      key: 'txt',
+      label: '导出为纯文本',
+      onClick: () => handleExportNovel('txt'),
+    },
+  ];
+
   return (
     <App>
       <div className="novel-detail">
         <div style={{ marginBottom: 16 }}>
-          <Button 
-            icon={<ArrowLeftOutlined />} 
-            onClick={() => navigate('/novels')}
-            style={{ marginRight: 16 }}
-          >
-            返回列表
-          </Button>
-          
-          <Button 
-            type="primary" 
-            icon={<EditOutlined />} 
-            onClick={showEditModal}
-            style={{ marginRight: 8 }}
-          >
-            编辑小说
-          </Button>
+          {renderActions()}
           
           <Button 
             type="primary" 
@@ -1737,37 +1855,6 @@ const NovelDetail: React.FC = () => {
             新建章节
           </Button>
           
-          <Dropdown
-            menu={{
-              items: [
-                {
-                  key: 'epub',
-                  label: '导出为EPUB',
-                  onClick: () => handleExportNovel('epub'),
-                },
-                {
-                  key: 'pdf',
-                  label: '导出为PDF',
-                  onClick: () => handleExportNovel('pdf'),
-                },
-                {
-                  key: 'docx',
-                  label: '导出为Word文档',
-                  onClick: () => handleExportNovel('docx'),
-                },
-                {
-                  key: 'txt',
-                  label: '导出为纯文本',
-                  onClick: () => handleExportNovel('txt'),
-                },
-              ],
-            }}
-          >
-            <Button loading={exportLoading} icon={<ExportOutlined />} style={{ marginRight: 8 }}>
-              导出 <DownOutlined />
-            </Button>
-          </Dropdown>
-
           <Button 
             icon={<FolderOutlined />} 
             onClick={showCategoryModal}

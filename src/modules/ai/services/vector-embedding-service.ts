@@ -1,5 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
-import { ipcRenderer } from 'electron';
+// import { ipcRenderer } from 'electron';
 import { 
   AISettings, 
   AIProviderType,
@@ -42,7 +42,7 @@ export class VectorEmbeddingService {
     // 检查向量数据库是否可用
     try {
       // 使用IPC调用主进程检查向量数据库是否可用
-      const collections = await ipcRenderer.invoke('vector:list-collections');
+      const collections = await window.electron.invoke('vector:list-collections');
       console.log('[VectorEmbeddingService] 向量数据库可用，已加载集合:', collections);
       this.vectorStoreEnabled = true;
     } catch (error) {
@@ -150,6 +150,19 @@ export class VectorEmbeddingService {
    * @param request 嵌入请求
    */
   private async processEmbeddingRequest(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    if (!this.settings) {
+      // 尝试从服务管理器获取当前设置
+      const currentSettings = this.serviceManager.getSettings();
+      
+      if (currentSettings) {
+        // 如果服务管理器有设置，则自动初始化
+        await this.initialize(currentSettings);
+      } else {
+        throw new Error('向量嵌入服务未初始化，且无法自动获取设置');
+      }
+    }
+    
+    // 再次检查初始化状态
     if (!this.settings) {
       throw new Error('向量嵌入服务未初始化');
     }
@@ -337,16 +350,22 @@ export class VectorEmbeddingService {
   public createVectorEmbedding(
     text: string, 
     vector: number[], 
-    metadata: VectorEmbedding['metadata']
+    metadata: Partial<VectorEmbedding['metadata']>
   ): VectorEmbedding {
     return {
       id: uuidv4(),
       vector,
+      embedding: vector,
       text,
       metadata: {
-        ...metadata,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
+        sourceId: metadata.sourceId || uuidv4(),
+        sourceType: metadata.sourceType || 'text',
+        novelId: metadata.novelId || '',
+        createdAt: metadata.createdAt || Date.now(),
+        updatedAt: metadata.updatedAt || Date.now(),
+        title: metadata.title,
+        section: metadata.section,
+        additionalContext: metadata.additionalContext
       }
     };
   }
@@ -402,9 +421,8 @@ export class VectorEmbeddingService {
   }
   
   /**
-   * 将向量保存到向量数据库
-   * 
-   * @param vectorEmbedding 向量嵌入对象
+   * 保存向量到向量存储
+   * @param vectorEmbedding 向量嵌入
    * @param collectionName 集合名称
    */
   public async saveToVectorStore(
@@ -412,31 +430,30 @@ export class VectorEmbeddingService {
     collectionName: string = 'default'
   ): Promise<boolean> {
     if (!this.vectorStoreEnabled) {
-      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      console.warn('[VectorEmbeddingService] 向量存储未启用，无法保存向量');
       return false;
     }
     
     try {
-      // 使用IPC调用主进程保存向量
-      await ipcRenderer.invoke('vector:create-embedding', {
+      // 将向量保存到向量存储
+      await window.electron.invoke('vector:create-embedding', {
         id: vectorEmbedding.id,
+        vector: vectorEmbedding.vector,
         text: vectorEmbedding.text,
         metadata: vectorEmbedding.metadata,
         collectionName
       });
       
-      console.log(`[VectorEmbeddingService] 向量已保存到集合 ${collectionName}`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 保存向量失败:', error);
+      console.error('[VectorEmbeddingService] 保存向量到向量存储失败:', error);
       return false;
     }
   }
   
   /**
-   * 批量将向量保存到向量数据库
-   * 
-   * @param vectorEmbeddings 向量嵌入对象数组
+   * 批量保存向量到向量存储
+   * @param vectorEmbeddings 向量嵌入数组
    * @param collectionName 集合名称
    */
   public async saveToVectorStoreBatch(
@@ -444,35 +461,33 @@ export class VectorEmbeddingService {
     collectionName: string = 'default'
   ): Promise<boolean> {
     if (!this.vectorStoreEnabled) {
-      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      console.warn('[VectorEmbeddingService] 向量存储未启用，无法批量保存向量');
       return false;
     }
     
+    if (vectorEmbeddings.length === 0) {
+      return true;
+    }
+    
     try {
-      // 准备批量保存的数据
-      const ids = vectorEmbeddings.map(ve => ve.id);
-      const texts = vectorEmbeddings.map(ve => ve.text);
-      const metadatas = vectorEmbeddings.map(ve => ve.metadata);
-      
-      // 使用IPC调用主进程批量保存向量
-      await ipcRenderer.invoke('vector:create-embedding-batch', {
-        ids,
-        texts,
-        metadatas,
+      // 批量保存向量到向量存储
+      await window.electron.invoke('vector:create-embedding-batch', {
+        ids: vectorEmbeddings.map(ve => ve.id),
+        vectors: vectorEmbeddings.map(ve => ve.vector),
+        texts: vectorEmbeddings.map(ve => ve.text),
+        metadatas: vectorEmbeddings.map(ve => ve.metadata),
         collectionName
       });
       
-      console.log(`[VectorEmbeddingService] 已批量保存${ids.length}个向量到集合 ${collectionName}`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 批量保存向量失败:', error);
+      console.error('[VectorEmbeddingService] 批量保存向量到向量存储失败:', error);
       return false;
     }
   }
   
   /**
-   * 从向量数据库检索相似向量
-   * 
+   * 查询相似向量
    * @param queryText 查询文本
    * @param filter 过滤条件
    * @param limit 结果数量限制
@@ -483,29 +498,22 @@ export class VectorEmbeddingService {
     filter: Record<string, any> = {},
     limit: number = 5,
     collectionName: string = 'default'
-  ): Promise<VectorEmbedding[]> {
+  ): Promise<any[]> {
     if (!this.vectorStoreEnabled) {
-      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      console.warn('[VectorEmbeddingService] 向量存储未启用，无法查询相似向量');
       return [];
     }
     
     try {
-      // 使用IPC调用主进程查询相似向量
-      const results = await ipcRenderer.invoke('vector:query-similar', {
+      // 查询相似向量
+      const results = await window.electron.invoke('vector:query-similar', {
         queryText,
         filter,
         limit,
         collectionName
       });
       
-      // 将结果转换为VectorEmbedding对象
-      return results.map((result: any) => ({
-        id: result.id,
-        text: result.text,
-        metadata: result.metadata || {},
-        embedding: [], // 通常不需要返回具体的向量值
-        similarity: 1 - (result.distance || 0) // 距离转换为相似度
-      }));
+      return results;
     } catch (error) {
       console.error('[VectorEmbeddingService] 查询相似向量失败:', error);
       return [];
@@ -513,8 +521,7 @@ export class VectorEmbeddingService {
   }
   
   /**
-   * 从向量数据库删除向量
-   * 
+   * 从向量存储中删除向量
    * @param ids 向量ID数组
    * @param collectionName 集合名称
    */
@@ -523,21 +530,20 @@ export class VectorEmbeddingService {
     collectionName: string = 'default'
   ): Promise<boolean> {
     if (!this.vectorStoreEnabled) {
-      console.warn('[VectorEmbeddingService] 向量存储未启用');
+      console.warn('[VectorEmbeddingService] 向量存储未启用，无法删除向量');
       return false;
     }
     
     try {
-      // 使用IPC调用主进程删除向量
-      await ipcRenderer.invoke('vector:delete-by-ids', {
+      // 从向量存储中删除向量
+      await window.electron.invoke('vector:delete-by-ids', {
         ids,
         collectionName
       });
       
-      console.log(`[VectorEmbeddingService] 已从集合 ${collectionName} 删除 ${ids.length} 个向量`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 删除向量失败:', error);
+      console.error('[VectorEmbeddingService] 从向量存储中删除向量失败:', error);
       return false;
     }
   }
@@ -553,7 +559,7 @@ export class VectorEmbeddingService {
   public async createAndSaveVectorEmbedding(
     text: string,
     modelId: string,
-    metadata: VectorEmbedding['metadata'] = {},
+    metadata: Partial<VectorEmbedding['metadata']> = {},
     collectionName: string = 'default'
   ): Promise<VectorEmbedding | null> {
     try {
@@ -590,7 +596,7 @@ export class VectorEmbeddingService {
   public async createAndSaveVectorEmbeddingBatch(
     texts: string[],
     modelId: string,
-    metadatas: VectorEmbedding['metadata'][] = [],
+    metadatas: Partial<VectorEmbedding['metadata']>[] = [],
     collectionName: string = 'default'
   ): Promise<VectorEmbedding[]> {
     try {

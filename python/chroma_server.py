@@ -10,8 +10,16 @@ import os
 import json
 import logging
 import argparse
+import sys
+import socket
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+# 设置stdout和stderr的编码为UTF-8
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, Body
@@ -31,7 +39,8 @@ except ImportError:
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.StreamHandler()]
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True
 )
 logger = logging.getLogger(__name__)
 
@@ -325,11 +334,37 @@ if __name__ == "__main__":
     parser.add_argument("--host", default="127.0.0.1", help="主机IP")
     parser.add_argument("--port", type=int, default=8000, help="端口号")
     parser.add_argument("--db-path", default=None, help="向量数据库路径")
+    parser.add_argument("--auto-port", action="store_true", help="自动选择可用端口")
     args = parser.parse_args()
     
     # 设置数据库路径环境变量
     if args.db_path:
         os.environ["VECTOR_DB_PATH"] = args.db_path
     
+    # 检查端口是否可用，如果不可用且启用了自动端口，则寻找可用端口
+    port = args.port
+    if args.auto_port:
+        def is_port_available(port):
+            """检查端口是否可用"""
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                try:
+                    s.bind(("127.0.0.1", port))
+                    return True
+                except socket.error:
+                    return False
+        
+        # 如果指定端口不可用，尝试从8001-8100寻找可用端口
+        if not is_port_available(port):
+            logger.warning(f"端口 {port} 已被占用，尝试寻找可用端口...")
+            for test_port in range(8001, 8101):
+                if is_port_available(test_port):
+                    port = test_port
+                    logger.info(f"找到可用端口: {port}")
+                    break
+            else:
+                logger.error("无法找到可用端口，服务启动失败")
+                sys.exit(1)
+    
     # 启动服务
-    uvicorn.run(app, host=args.host, port=args.port) 
+    logger.info(f"正在启动服务，监听地址: {args.host}:{port}")
+    uvicorn.run(app, host=args.host, port=port) 

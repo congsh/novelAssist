@@ -17,6 +17,7 @@ class VectorService {
     this.pythonPath = this.getPythonPath();
     this.ready = false;
     this.startPromise = null;
+    this.actualPort = port;
   }
 
   /**
@@ -79,7 +80,8 @@ class VectorService {
           scriptPath,
           '--host', '127.0.0.1',
           '--port', this.serverPort.toString(),
-          '--db-path', dbPath
+          '--db-path', dbPath,
+          '--auto-port'
         ];
         
         logger.info(`执行命令: ${this.pythonPath} ${args.join(' ')}`);
@@ -92,7 +94,20 @@ class VectorService {
         // 监听输出
         if (this.pythonProcess.stdout) {
           this.pythonProcess.stdout.on('data', (data) => {
-            logger.info(`[Python] ${data.toString().trim()}`);
+            const output = data.toString().trim();
+            logger.info(`[Python] ${output}`);
+            
+            // 检查是否包含端口信息
+            const portMatch = output.match(/监听地址: 127\.0\.0\.1:(\d+)/);
+            if (portMatch && portMatch[1]) {
+              const detectedPort = parseInt(portMatch[1], 10);
+              if (detectedPort !== this.serverPort) {
+                logger.info(`检测到服务使用了不同的端口: ${detectedPort}`);
+                this.serverPort = detectedPort;
+                this.serverUrl = `http://localhost:${detectedPort}`;
+                this.actualPort = detectedPort;
+              }
+            }
           });
         }
         
