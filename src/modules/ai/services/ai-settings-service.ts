@@ -7,50 +7,40 @@ import { v4 as uuidv4 } from 'uuid';
 const defaultScenarioConfigs = {
   [AIScenario.CHAT]: {
     enabled: true,
-    providerId: 'default-openai',
-    modelId: 'gpt-3.5-turbo',
+    providerId: '',
+    modelId: '',
     temperature: 0.7,
     maxTokens: 1000,
   },
   [AIScenario.NOVEL_COLLABORATION]: {
     enabled: true,
-    providerId: 'default-openai',
-    modelId: 'gpt-3.5-turbo',
+    providerId: '',
+    modelId: '',
     temperature: 0.7,
     maxTokens: 1000,
   },
   [AIScenario.CONTEXT_ENHANCEMENT]: {
     enabled: true,
-    providerId: 'default-openai',
-    modelId: 'gpt-3.5-turbo',
+    providerId: '',
+    modelId: '',
     temperature: 0.7,
     maxTokens: 1000,
   },
   [AIScenario.NOVEL_ANALYSIS]: {
     enabled: true,
-    providerId: 'default-openai',
-    modelId: 'gpt-3.5-turbo',
+    providerId: '',
+    modelId: '',
     temperature: 0.7,
     maxTokens: 1000,
   }
 };
 
 /**
- * AI设置默认值
+ * AI设置默认值（空设置）
  */
-const defaultAISettings: AISettings = {
-  activeProviderId: 'default-openai',
-  providers: [
-    {
-      id: 'default-openai',
-      name: 'OpenAI (请设置API密钥)',
-      type: AIProviderType.OPENAI,
-      apiKey: '',
-      defaultModel: 'gpt-3.5-turbo',
-      temperature: 0.7,
-      maxTokens: 1000,
-    }
-  ],
+const emptyAISettings: AISettings = {
+  activeProviderId: '',
+  providers: [],
   models: [],
   scenarioConfigs: { ...defaultScenarioConfigs }
 };
@@ -81,6 +71,57 @@ export class AISettingsService {
     return AISettingsService.instance;
   }
   
+  /**
+   * 确保存在嵌入模型
+   */
+  async ensureEmbeddingModels(): Promise<void> {
+    try {
+      const settings = await this.loadSettings();
+      
+      // 如果没有配置任何AI提供商，则跳过
+      if (!this.hasConfiguredAI(settings)) {
+        return;
+      }
+      
+      let hasChanges = false;
+      
+      // 获取所有OpenAI和OpenAI兼容类型的提供商
+      const supportedProviders = settings.providers.filter(p => 
+        p.type === AIProviderType.OPENAI || p.type === AIProviderType.OPENAI_COMPATIBLE
+      );
+      
+      for (const provider of supportedProviders) {
+        // 检查该提供商是否已经有嵌入模型
+        const hasEmbeddingModel = settings.models.some(m => 
+          m.providerId === provider.id && m.isEmbeddingModel
+        );
+        
+        // 如果没有嵌入模型，添加默认的嵌入模型
+        if (!hasEmbeddingModel) {
+          const embedModel: AIModel = {
+            id: `${provider.id}-text-embedding-ada-002`,
+            name: 'text-embedding-ada-002',
+            providerId: provider.id,
+            description: 'OpenAI文本嵌入模型，用于向量化文本',
+            isEmbeddingModel: true,
+            capabilities: ['文本嵌入']
+          };
+          
+          settings.models.push(embedModel);
+          hasChanges = true;
+        }
+      }
+      
+      // 如果有变更，保存设置
+      if (hasChanges) {
+        await this.saveSettings(settings);
+        console.log('成功添加默认嵌入模型');
+      }
+    } catch (error) {
+      console.error('确保嵌入模型存在时出错:', error);
+    }
+  }
+  
   private constructor() {
     // 确定是否是生产构建
     this.isProductionBuild = process.env.NODE_ENV === 'production';
@@ -88,6 +129,49 @@ export class AISettingsService {
     // 如果是生产构建，记录日志
     if (this.isProductionBuild) {
       console.log('AI设置服务运行在生产环境模式');
+    }
+    
+    // 确保存在嵌入模型（异步初始化）
+    this.ensureEmbeddingModels().catch(error => {
+      console.error('初始化嵌入模型失败:', error);
+    });
+  }
+  
+  /**
+   * 检查是否配置了AI（是否有可用的AI提供商）
+   * @param settings AI设置，如果未提供会加载当前设置
+   */
+  async hasConfiguredAI(settings?: AISettings): Promise<boolean> {
+    try {
+      const aiSettings = settings || await this.loadSettings();
+      
+      // 检查是否有提供商配置
+      if (!aiSettings.providers || aiSettings.providers.length === 0) {
+        return false;
+      }
+      
+      // 检查是否有活动提供商
+      if (!aiSettings.activeProviderId) {
+        return false;
+      }
+      
+      // 检查活动提供商是否存在
+      const activeProvider = aiSettings.providers.find(p => p.id === aiSettings.activeProviderId);
+      if (!activeProvider) {
+        return false;
+      }
+      
+      // 检查活动提供商是否有API密钥（对于需要API密钥的提供商类型）
+      if ([AIProviderType.OPENAI, AIProviderType.DEEPSEEK, AIProviderType.OPENAI_COMPATIBLE].includes(activeProvider.type)) {
+        if (!activeProvider.apiKey) {
+          return false;
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('检查AI配置状态失败:', error);
+      return false;
     }
   }
   
@@ -129,18 +213,13 @@ export class AISettingsService {
       }
       
       // 加载各部分
-      const activeProviderId = await window.electron.invoke('settings:get', { key: ACTIVE_PROVIDER_ID_KEY }) || 'default-openai';
+      const activeProviderId = await window.electron.invoke('settings:get', { key: ACTIVE_PROVIDER_ID_KEY }) || '';
       const providers = await window.electron.invoke('settings:get', { key: PROVIDERS_KEY }) || [];
       const models = await window.electron.invoke('settings:get', { key: MODELS_KEY }) || [];
       
-      // 如果没有提供商或是生产构建的首次运行，使用默认提供商（不带API密钥）
-      if (!providers || providers.length === 0 || this.isProductionBuild) {
-        // 确保生产构建使用默认设置，不包含任何测试环境的API密钥
-        if (this.isProductionBuild) {
-          console.log('生产环境：使用默认AI设置，需要用户自行设置API密钥');
-          return defaultAISettings;
-        }
-        return defaultAISettings;
+      // 如果没有提供商，返回空设置
+      if (!providers || providers.length === 0) {
+        return emptyAISettings;
       }
       
       // 构建设置
@@ -157,15 +236,15 @@ export class AISettingsService {
       return newSettings;
     } catch (error) {
       console.error('读取AI设置失败:', error);
-      return defaultAISettings;
+      return emptyAISettings;
     }
   }
   
   /**
-   * 获取默认设置
+   * 获取空设置
    */
-  getDefaultSettings(): AISettings {
-    return { ...defaultAISettings };
+  getEmptySettings(): AISettings {
+    return { ...emptyAISettings };
   }
   
   /**

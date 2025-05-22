@@ -167,6 +167,25 @@ export class VectorEmbeddingService {
       throw new Error('向量嵌入服务未初始化');
     }
     
+    // 检查是否配置了AI
+    const aiSettingsService = await import('./ai-settings-service').then(m => m.AISettingsService.getInstance());
+    const hasConfiguredAI = await aiSettingsService.hasConfiguredAI(this.settings);
+    
+    if (!hasConfiguredAI) {
+      // 通知UI显示配置提示
+      await window.electron.invoke('dialog:show', {
+        type: 'info',
+        title: 'AI服务未配置',
+        message: '请先在AI设置中配置OpenAI或兼容服务才能使用嵌入功能',
+        buttons: ['确定']
+      });
+      
+      // 打开AI设置页面
+      await window.electron.invoke('app:navigate', { path: '/settings/ai' });
+      
+      throw new Error('AI服务未配置，请先配置AI服务');
+    }
+    
     // 查找可以生成嵌入的服务
     const provider = this.findEmbeddingProvider(request.modelId);
     
@@ -174,17 +193,40 @@ export class VectorEmbeddingService {
       throw new Error(`找不到支持嵌入的服务提供商: ${request.modelId}`);
     }
     
+    // 如果没有指定模型ID，或者指定的模型ID不是嵌入模型，尝试使用合适的嵌入模型
+    let embeddingModelId = request.modelId;
+    
+    if (!embeddingModelId) {
+      // 查找该提供商下的嵌入模型
+      const embeddingModel = this.settings.models.find(m => 
+        m.providerId === provider.id && m.isEmbeddingModel
+      );
+      
+      if (embeddingModel) {
+        embeddingModelId = embeddingModel.id;
+      } else {
+        // 使用默认嵌入模型ID
+        embeddingModelId = 'text-embedding-ada-002';
+      }
+    }
+    
+    // 创建新的请求，使用找到的嵌入模型ID
+    const embeddingRequest = {
+      ...request,
+      modelId: embeddingModelId
+    };
+    
     // 根据提供商类型选择不同的嵌入方法
     switch (provider.type) {
       case AIProviderType.OPENAI:
-        return this.createOpenAIEmbedding(request, provider.id);
+        return this.createOpenAIEmbedding(embeddingRequest, provider.id);
         
       case AIProviderType.DEEPSEEK:
-        return this.createDeepSeekEmbedding(request, provider.id);
+        return this.createDeepSeekEmbedding(embeddingRequest, provider.id);
         
       // 添加其他可能支持嵌入的服务类型
       case AIProviderType.OPENAI_COMPATIBLE:
-        return this.createOpenAICompatibleEmbedding(request, provider.id);
+        return this.createOpenAICompatibleEmbedding(embeddingRequest, provider.id);
         
       default:
         throw new Error(`提供商 ${provider.type} 不支持嵌入生成`);
@@ -207,7 +249,29 @@ export class VectorEmbeddingService {
       return this.settings.providers.find(p => p.id === model.providerId);
     }
     
-    // 如果没有找到指定模型，使用默认的OpenAI提供商
+    // 如果没有找到指定模型，尝试查找标记为嵌入模型的模型
+    const embeddingModels = this.settings.models.filter(m => m.isEmbeddingModel);
+    
+    if (embeddingModels.length > 0) {
+      // 按提供商类型排序，优先选择OpenAI
+      const sortedModels = [...embeddingModels].sort((a, b) => {
+        const providerA = this.settings?.providers.find(p => p.id === a.providerId);
+        const providerB = this.settings?.providers.find(p => p.id === b.providerId);
+        
+        if (providerA?.type === AIProviderType.OPENAI && providerB?.type !== AIProviderType.OPENAI) {
+          return -1;
+        } else if (providerA?.type !== AIProviderType.OPENAI && providerB?.type === AIProviderType.OPENAI) {
+          return 1;
+        }
+        return 0;
+      });
+      
+      // 使用第一个可用的嵌入模型
+      const selectedModel = sortedModels[0];
+      return this.settings.providers.find(p => p.id === selectedModel.providerId);
+    }
+    
+    // 如果没有找到嵌入模型，使用默认的兼容嵌入的提供商
     return this.settings.providers.find(p => 
       p.type === AIProviderType.OPENAI || 
       p.type === AIProviderType.DEEPSEEK ||

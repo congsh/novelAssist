@@ -39,13 +39,39 @@ const AIAssistantPage: React.FC = () => {
   useEffect(() => {
     const initialize = async () => {
       try {
-        await chatService.initialize();
+        // 先检查AI是否已配置
+        const aiSettingsService = (await import('../../modules/ai/services/ai-settings-service')).AISettingsService.getInstance();
+        const settings = await aiSettingsService.loadSettings();
+        const isConfigured = await aiSettingsService.hasConfiguredAI(settings);
+        
+        if (!isConfigured) {
+          // 如果未配置，直接显示设置页面
+          console.log('AI服务未配置，显示设置页面');
+          message.info('请先配置AI设置', 3);
+          setActiveTab('settings');
+          setInitializing(false);
+          return;
+        }
+        
+        // 如果已配置，初始化聊天服务
+        const initResult = await chatService.initialize();
+        if (!initResult) {
+          console.warn('聊天服务初始化失败，显示设置页面');
+          message.warning('AI服务初始化失败，请检查设置', 3);
+          setActiveTab('settings');
+          setInitializing(false);
+          return;
+        }
+        
         await loadAllSessions();
       } catch (error) {
         console.error('初始化聊天服务失败:', error);
         
         // 检查是否是API密钥缺失错误
-        if (error instanceof Error && error.message.includes('缺少OpenAI API密钥')) {
+        if (error instanceof Error && 
+            (error.message.includes('缺少OpenAI API密钥') || 
+             error.message.includes('AI服务未配置') ||
+             error.message.includes('未找到提供商'))) {
           message.info('请先配置AI设置', 3);
           // 切换到设置标签页
           setActiveTab('settings');
@@ -64,12 +90,17 @@ const AIAssistantPage: React.FC = () => {
   const loadAllSessions = async () => {
     try {
       const allSessions = await chatService.getAllSessions();
-      setSessions(allSessions);
+      setSessions(allSessions || []);
       
       // 如果有会话，加载最近的一个
-      if (allSessions.length > 0) {
+      if (allSessions && allSessions.length > 0) {
         const latestSession = allSessions.sort((a, b) => b.updatedAt - a.updatedAt)[0];
-        await loadSession(latestSession.id);
+        try {
+          await loadSession(latestSession.id);
+        } catch (error) {
+          console.error('加载最新会话失败，创建新会话:', error);
+          await createNewSession();
+        }
       } else {
         // 否则创建新会话
         if (!currentSession) {
@@ -77,8 +108,12 @@ const AIAssistantPage: React.FC = () => {
         }
       }
     } catch (error) {
-      console.error('加载会话失败:', error);
-      message.error('加载会话失败');
+      console.error('加载会话失败，创建新会话:', error);
+      setSessions([]);
+      // 创建新会话而不是显示错误
+      if (!currentSession) {
+        await createNewSession();
+      }
     }
   };
 
@@ -95,18 +130,45 @@ const AIAssistantPage: React.FC = () => {
   const createNewSession = async () => {
     try {
       const newSession = await chatService.createNewSession();
-      setCurrentSession(newSession);
-      setMessages([]);
-      setSessions(prev => [newSession, ...prev]);
-      // 聚焦输入框
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-      return newSession;
+      if (newSession) {
+        setCurrentSession(newSession);
+        setMessages([]);
+        setSessions(prev => [newSession, ...prev]);
+        // 聚焦输入框
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+        return newSession;
+      } else {
+        // 如果无法创建会话，至少提供一个空的会话体验
+        const emptySession = {
+          id: 'local-' + Date.now(),
+          title: '新对话',
+          messages: [],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          modelId: 'local',
+          providerId: 'local'
+        };
+        setCurrentSession(emptySession);
+        setMessages([]);
+        return emptySession;
+      }
     } catch (error) {
-      console.error('创建新会话失败:', error);
-      message.error('创建新会话失败');
-      return null;
+      console.error('创建新会话失败，使用临时会话:', error);
+      // 创建一个本地临时会话，这样即使创建失败也能有基本UI
+      const emptySession = {
+        id: 'local-' + Date.now(),
+        title: '新对话',
+        messages: [],
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        modelId: 'local',
+        providerId: 'local'
+      };
+      setCurrentSession(emptySession);
+      setMessages([]);
+      return emptySession;
     }
   };
 

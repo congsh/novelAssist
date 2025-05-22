@@ -256,7 +256,11 @@ class VectorService {
         
         if (process.platform === 'win32') {
           // Windows平台使用taskkill强制终止进程树
-          const taskkill = spawn('taskkill', ['/pid', String(pid), '/f', '/t']);
+          const taskkill = spawn('taskkill', ['/pid', String(pid), '/f', '/t'], {
+            // 设置编码以解决乱码问题
+            windowsHide: true,
+            encoding: 'utf8'
+          });
           
           // 输出taskkill的结果
           taskkill.stdout.on('data', (data) => {
@@ -274,7 +278,7 @@ class VectorService {
             // 额外检查：确保没有相同端口的进程残留
             try {
               const { exec } = require('child_process');
-              exec(`netstat -ano | findstr :${this.actualPort}`, (error, stdout, stderr) => {
+              exec(`netstat -ano | findstr :${this.actualPort}`, {encoding: 'utf8'}, (error, stdout, stderr) => {
                 if (error) {
                   logger.debug(`检查端口占用出错: ${error.message}`);
                   return;
@@ -290,10 +294,17 @@ class VectorService {
                   // 提取PID并尝试杀死进程
                   const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
                   if (pidMatch && pidMatch[1]) {
-                    const remainingPid = pidMatch[1].trim();
+                    const remainingPid = parseInt(pidMatch[1].trim(), 10);
+                    
+                    // 检查PID是否为系统进程，避免杀死重要系统进程
+                    if (remainingPid <= 4 || remainingPid === 0) {
+                      logger.warn(`检测到系统关键进程 PID: ${remainingPid}，跳过终止操作`);
+                      return;
+                    }
+                    
                     logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
                     
-                    exec(`taskkill /F /PID ${remainingPid} /T`, (err, out) => {
+                    exec(`taskkill /F /PID ${remainingPid} /T`, {encoding: 'utf8'}, (err, out) => {
                       if (err) {
                         logger.error(`杀死残留进程失败: ${err.message}`);
                       } else {
@@ -360,7 +371,7 @@ class VectorService {
       // 额外检查：确保端口已释放
       try {
         const { exec } = require('child_process');
-        exec(`netstat -ano | findstr :${port}`, (error, stdout) => {
+        exec(`netstat -ano | findstr :${port}`, {encoding: 'utf8'}, (error, stdout) => {
           // 忽略错误，因为可能是因为没有找到匹配项
           if (stdout && stdout.includes(`:${port}`)) {
             logger.warn(`停止服务后端口 ${port} 仍被占用，尝试额外清理...`);
@@ -368,10 +379,17 @@ class VectorService {
             // 提取PID并尝试杀死进程
             const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
             if (pidMatch && pidMatch[1]) {
-              const remainingPid = pidMatch[1].trim();
+              const remainingPid = parseInt(pidMatch[1].trim(), 10);
+              
+              // 检查PID是否为系统进程，避免杀死重要系统进程
+              if (remainingPid <= 4 || remainingPid === 0) {
+                logger.warn(`检测到系统关键进程 PID: ${remainingPid}，跳过终止操作`);
+                return;
+              }
+              
               logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
               
-              exec(`taskkill /F /PID ${remainingPid} /T`, (err, out) => {
+              exec(`taskkill /F /PID ${remainingPid} /T`, {encoding: 'utf8'}, (err, out) => {
                 if (err) {
                   logger.error(`杀死残留进程失败: ${err.message}`);
                 } else {

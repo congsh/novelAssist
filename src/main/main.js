@@ -171,7 +171,8 @@ app.whenReady().then(async () => {
   
   // 加载IPC处理器 - 这些模块会自动注册处理器
   require('./ipc/novel-handler');
-  require('./ipc/ai-handler');
+  const { registerAIHandlers } = require('./ipc/ai-handler');
+  registerAIHandlers(); // 确保调用AI处理器注册函数
   require('./ipc/location-handler');
   require('./ipc/outline-handler');
 

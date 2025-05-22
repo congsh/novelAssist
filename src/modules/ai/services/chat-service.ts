@@ -45,10 +45,24 @@ export class ChatService {
   async initialize(): Promise<boolean> {
     try {
       const settings = await this.aiSettingsService.loadSettings();
+      
+      // 检查AI是否已配置
+      const hasConfiguredAI = await this.aiSettingsService.hasConfiguredAI(settings);
+      if (!hasConfiguredAI) {
+        console.warn('AI服务未配置，聊天服务初始化将返回false');
+        return false;
+      }
+      
+      // 检查activeProviderId是否有效
+      if (!settings.activeProviderId || !settings.providers.some(p => p.id === settings.activeProviderId)) {
+        console.error('未找到有效的活动提供商ID');
+        return false;
+      }
+      
       const result = await aiServiceManager.initialize(settings);
       
       // 设置上下文管理器的最大token数
-      if (settings.activeProviderId && settings.providers) {
+      if (result && settings.activeProviderId && settings.providers) {
         const activeProvider = settings.providers.find(p => p.id === settings.activeProviderId);
         if (activeProvider && activeProvider.maxTokens) {
           // 为上下文保留75%的token
@@ -120,6 +134,7 @@ export class ChatService {
       return true;
     } catch (error) {
       console.error('保存聊天会话失败:', error);
+      // 当保存失败时，仍然保持当前会话状态，避免影响用户体验
       return false;
     }
   }

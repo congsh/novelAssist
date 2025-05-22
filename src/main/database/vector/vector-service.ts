@@ -243,7 +243,70 @@ export class VectorService {
       try {
         if (process.platform === 'win32') {
           // Windows平台使用taskkill强制终止进程树
-          spawn('taskkill', ['/pid', this.pythonProcess.pid!.toString(), '/f', '/t']);
+          const taskkill = spawn('taskkill', ['/pid', this.pythonProcess.pid!.toString(), '/f', '/t'], {
+            // 设置编码以解决乱码问题
+            windowsHide: true
+          });
+          
+          // 监听taskkill的输出和错误
+          if (taskkill.stdout) {
+            taskkill.stdout.on('data', (data: Buffer) => {
+              logger.info(`taskkill输出: ${data.toString().trim()}`);
+            });
+          }
+          
+          if (taskkill.stderr) {
+            taskkill.stderr.on('data', (data: Buffer) => {
+              logger.error(`taskkill错误: ${data.toString().trim()}`);
+            });
+          }
+          
+          // 监听taskkill结束
+          taskkill.on('close', (code: number | null) => {
+            logger.info(`taskkill进程退出，退出码: ${code}`);
+            
+            // 额外检查端口占用情况
+            try {
+              const { exec } = require('child_process');
+              const execOptions = { windowsHide: true };
+              
+              exec(`netstat -ano | findstr :${this.serverPort}`, execOptions, (error: Error | null, stdout: string) => {
+                if (error) {
+                  logger.debug(`检查端口占用出错: ${error.message}`);
+                  return;
+                }
+                
+                if (stdout && stdout.includes(`:${this.serverPort}`)) {
+                  logger.warn(`端口 ${this.serverPort} 仍被占用，尝试进一步清理...`);
+                  
+                  // 提取PID并尝试终止进程
+                  const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
+                  if (pidMatch && pidMatch[1]) {
+                    const remainingPid = parseInt(pidMatch[1].trim(), 10);
+                    
+                    // 检查PID是否为系统进程，避免杀死重要系统进程
+                    if (remainingPid <= 4 || remainingPid === 0) {
+                      logger.warn(`检测到系统关键进程 PID: ${remainingPid}，跳过终止操作`);
+                      return;
+                    }
+                    
+                    logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
+                    
+                    exec(`taskkill /F /PID ${remainingPid} /T`, execOptions, (err: Error | null, out: string) => {
+                      if (err) {
+                        logger.error(`杀死残留进程失败: ${err.message}`);
+                      } else {
+                        logger.info(`已杀死残留进程: ${out.trim()}`);
+                      }
+                    });
+                  }
+                }
+              });
+            } catch (error) {
+              const err = error instanceof Error ? error : new Error(String(error));
+              logger.error('检查端口占用失败:', err);
+            }
+          });
         } else {
           // Unix平台可以直接kill
           this.pythonProcess.kill('SIGTERM');
@@ -264,6 +327,45 @@ export class VectorService {
     this.stopPythonProcess();
     this.ready = false;
     this.startPromise = null;
+    
+    // 额外检查：确保端口已释放
+    try {
+      const { exec } = require('child_process');
+      const execOptions = { windowsHide: true };
+      
+      exec(`netstat -ano | findstr :${this.serverPort}`, execOptions, (error: Error | null, stdout: string) => {
+        // 忽略错误，因为可能是没有找到匹配项
+        if (stdout && stdout.includes(`:${this.serverPort}`)) {
+          logger.warn(`停止服务后端口 ${this.serverPort} 仍被占用，尝试额外清理...`);
+          
+          // 提取PID并尝试杀死进程
+          const pidMatch = stdout.match(/\s+(\d+)\s*$/m);
+          if (pidMatch && pidMatch[1]) {
+            const remainingPid = parseInt(pidMatch[1].trim(), 10);
+            
+            // 检查PID是否为系统进程，避免杀死重要系统进程
+            if (remainingPid <= 4 || remainingPid === 0) {
+              logger.warn(`检测到系统关键进程 PID: ${remainingPid}，跳过终止操作`);
+              return;
+            }
+            
+            logger.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
+            
+            exec(`taskkill /F /PID ${remainingPid} /T`, execOptions, (err: Error | null, out: string) => {
+              if (err) {
+                logger.error(`杀死残留进程失败: ${err.message}`);
+              } else {
+                logger.info(`已杀死残留进程: ${out.trim()}`);
+              }
+            });
+          }
+        }
+      });
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      logger.error('检查端口占用失败:', err);
+    }
+    
     logger.info('向量数据库服务已停止');
   }
 

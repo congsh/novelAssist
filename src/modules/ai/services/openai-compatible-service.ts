@@ -10,7 +10,9 @@ import {
   ChatCompletionRequest, 
   ChatCompletionResponse, 
   ChatMessage, 
-  ChatMessageRole 
+  ChatMessageRole,
+  EmbeddingRequest,
+  EmbeddingResponse
 } from '../types';
 import https from 'https';
 
@@ -334,6 +336,40 @@ export class OpenAICompatibleService implements AIBaseService {
         console.error('测试连接彻底失败:', error);
         return false;
       }
+    }
+  }
+
+  /**
+   * 创建文本的向量嵌入
+   * @param request 嵌入请求
+   */
+  async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    if (!this.client) {
+      throw new Error('OpenAI Compatible客户端未初始化');
+    }
+    
+    const { text, modelId } = request;
+    
+    try {
+      // 使用兼容API创建嵌入
+      const response = await this.client.embeddings.create({
+        model: modelId || 'text-embedding-ada-002', // 默认使用text-embedding-ada-002模型
+        input: text,
+      });
+      
+      // 返回嵌入响应
+      return {
+        id: uuidv4(),
+        embedding: response.data[0].embedding,
+        model: response.model,
+        usage: {
+          promptTokens: response.usage.prompt_tokens,
+          totalTokens: response.usage.total_tokens
+        }
+      };
+    } catch (error) {
+      console.error('OpenAI Compatible嵌入生成失败:', error);
+      throw new Error(`创建嵌入失败: ${(error as Error).message}`);
     }
   }
 } 

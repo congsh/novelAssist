@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Table, Button, Modal, Form, Input, Select, InputNumber, Tag, message, Typography } from 'antd';
+import { Card, Table, Button, Modal, Form, Input, Select, InputNumber, Tag, message, Typography, Switch } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons';
 import { v4 as uuidv4 } from 'uuid';
 import { AIModel, AIProviderType } from '../types';
@@ -61,6 +61,14 @@ const AIModelManager: React.FC = () => {
       
       setLoadingModels(true);
       const settings = await aiSettingsService.loadSettings();
+      
+      // 检查AI是否已配置
+      const isConfigured = await aiSettingsService.hasConfiguredAI(settings);
+      if (!isConfigured) {
+        message.error('AI服务未配置，请先完成API设置');
+        setLoadingModels(false);
+        return;
+      }
       
       try {
         // 临时切换到当前供应商
@@ -158,7 +166,7 @@ const AIModelManager: React.FC = () => {
   // 添加或编辑模型
   const handleAddOrEditModel = () => {
     form.validateFields().then(values => {
-      const { id, name, providerId, description, maxTokens, contextWindow, capabilities } = values;
+      const { id, name, providerId, description, maxTokens, contextWindow, capabilities, isEmbeddingModel } = values;
       
       const modelData: AIModel = {
         id: id || uuidv4(),
@@ -167,7 +175,8 @@ const AIModelManager: React.FC = () => {
         description,
         maxTokens,
         contextWindow,
-        capabilities: capabilities || []
+        capabilities: capabilities || [],
+        isEmbeddingModel: isEmbeddingModel || false
       };
       
       saveModel(modelData);
@@ -223,7 +232,8 @@ const AIModelManager: React.FC = () => {
       description: model.description || '',
       maxTokens: model.maxTokens,
       contextWindow: model.contextWindow,
-      capabilities: model.capabilities || []
+      capabilities: model.capabilities || [],
+      isEmbeddingModel: model.isEmbeddingModel
     });
     setModalVisible(true);
   };
@@ -236,9 +246,17 @@ const AIModelManager: React.FC = () => {
   // 表格列定义
   const columns = [
     {
-      title: '名称',
+      title: '模型名称',
       dataIndex: 'name',
       key: 'name',
+      render: (text: string, record: AIModel) => (
+        <span>
+          {text}
+          {record.isEmbeddingModel && (
+            <Tag color="green" style={{ marginLeft: 8 }}>嵌入</Tag>
+          )}
+        </span>
+      )
     },
     {
       title: '供应商',
@@ -311,7 +329,8 @@ const AIModelManager: React.FC = () => {
     '文本分类',
     '情感分析',
     '翻译',
-    '创意写作'
+    '创意写作',
+    '文本嵌入'
   ];
   
   // 过滤当前供应商的模型
@@ -446,6 +465,15 @@ const AIModelManager: React.FC = () => {
                 <Option key={cap} value={cap}>{cap}</Option>
               ))}
             </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="isEmbeddingModel"
+            valuePropName="checked"
+            label="嵌入模型"
+            tooltip="此模型是否支持文本嵌入功能"
+          >
+            <Switch />
           </Form.Item>
         </Form>
       </Modal>

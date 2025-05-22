@@ -167,7 +167,8 @@ const AIScenarioSettings: React.FC = () => {
     try {
       setLoading(true);
       
-      const values = await form.validateFields();
+      // 获取所有表单值，不进行验证
+      const values = form.getFieldsValue();
       
       if (!settings) {
         message.error('设置未加载');
@@ -178,14 +179,19 @@ const AIScenarioSettings: React.FC = () => {
       const scenarioConfigs: Record<AIScenario, AIScenarioConfig> = {} as Record<AIScenario, AIScenarioConfig>;
       
       Object.values(AIScenario).forEach(scenario => {
+        // 如果场景未启用，使用默认值或现有值
+        const enabled = values[`${scenario}_enabled`];
+        const existingConfig = settings.scenarioConfigs?.[scenario] || createDefaultConfig(settings, scenario);
+        
         scenarioConfigs[scenario] = {
-          enabled: values[`${scenario}_enabled`],
-          providerId: values[`${scenario}_providerId`],
-          modelId: values[`${scenario}_modelId`],
-          temperature: values[`${scenario}_temperature`],
-          maxTokens: values[`${scenario}_maxTokens`],
-          systemPrompt: values[`${scenario}_systemPrompt`],
-          costLimit: values[`${scenario}_costLimit`]
+          enabled: enabled,
+          // 如果场景未启用，保留现有值或使用默认值
+          providerId: enabled ? values[`${scenario}_providerId`] : (existingConfig.providerId || settings.activeProviderId || ''),
+          modelId: enabled ? values[`${scenario}_modelId`] : (existingConfig.modelId || ''),
+          temperature: values[`${scenario}_temperature`] ?? 0.7,
+          maxTokens: values[`${scenario}_maxTokens`] ?? 1000,
+          systemPrompt: values[`${scenario}_systemPrompt`] || defaultSystemPrompts[scenario],
+          costLimit: values[`${scenario}_costLimit`] ?? 0
         };
       });
       
@@ -201,7 +207,7 @@ const AIScenarioSettings: React.FC = () => {
       message.success('场景设置已保存');
     } catch (error) {
       console.error('保存设置失败:', error);
-      message.error('保存设置失败');
+      message.error(`保存设置失败: ${error}`);
     } finally {
       setLoading(false);
     }
@@ -334,7 +340,17 @@ const AIScenarioSettings: React.FC = () => {
                   <Form.Item
                     label="使用AI提供商"
                     name={`${scenario}_providerId`}
-                    rules={[{ required: true, message: '请选择AI提供商' }]}
+                    rules={[
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          const enabled = getFieldValue(`${scenario}_enabled`);
+                          if (!enabled || value) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error('请选择AI提供商'));
+                        }
+                      })
+                    ]}
                   >
                     <Select placeholder="选择AI提供商">
                       {providers.map(provider => (
@@ -346,7 +362,17 @@ const AIScenarioSettings: React.FC = () => {
                   <Form.Item
                     label="使用模型"
                     name={`${scenario}_modelId`}
-                    rules={[{ required: true, message: '请选择模型' }]}
+                    rules={[
+                      ({ getFieldValue }) => ({
+                        validator(_, value) {
+                          const enabled = getFieldValue(`${scenario}_enabled`);
+                          if (!enabled || value) {
+                            return Promise.resolve();
+                          }
+                          return Promise.reject(new Error('请选择模型'));
+                        }
+                      })
+                    ]}
                   >
                     <Select placeholder="选择模型">
                       {scenarioProviders[scenario] && 

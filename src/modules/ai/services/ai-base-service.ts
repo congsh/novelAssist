@@ -3,7 +3,9 @@ import {
   AISettings, 
   ChatCompletionRequest,
   ChatCompletionResponse,
-  ChatMessage
+  ChatMessage,
+  EmbeddingRequest,
+  EmbeddingResponse
 } from '../types';
 
 /**
@@ -36,6 +38,12 @@ export interface AIBaseService {
     request: ChatCompletionRequest, 
     callback: (partialResponse: ChatMessage) => void
   ): Promise<ChatCompletionResponse>;
+  
+  /**
+   * 创建文本的向量嵌入
+   * @param request 嵌入请求
+   */
+  createEmbedding?(request: EmbeddingRequest): Promise<EmbeddingResponse>;
   
   /**
    * 取消正在进行的请求

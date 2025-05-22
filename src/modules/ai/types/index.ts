@@ -31,6 +31,7 @@ export interface AIModel {
   contextWindow?: number;
   capabilities?: string[];
   costPerToken?: number;  // 每千token的成本（美元）
+  isEmbeddingModel?: boolean; // 是否为嵌入模型
 }
 
 /**

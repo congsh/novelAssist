@@ -35,6 +35,21 @@ export class AIEditorService {
       // 加载AI设置
       const settings = await this.aiSettingsService.loadSettings();
       
+      // 检查AI是否已配置
+      const isConfigured = await this.aiSettingsService.hasConfiguredAI(settings);
+      if (!isConfigured) {
+        console.warn('AI服务未配置，跳过初始化');
+        this.initialized = false;
+        return;
+      }
+      
+      // 检查activeProviderId是否有效
+      if (!settings.activeProviderId || !settings.providers.some(p => p.id === settings.activeProviderId)) {
+        console.error('未找到有效的活动提供商ID');
+        this.initialized = false;
+        return;
+      }
+      
       // 初始化AI服务管理器
       const result = await this.aiServiceManager.initialize(settings);
       
@@ -59,9 +74,17 @@ export class AIEditorService {
       return true;
     }
     
-    // 如果未初始化，尝试重新初始化
+    // 如果未初始化，先检查AI是否已配置
     try {
       const settings = await this.aiSettingsService.loadSettings();
+      const isConfigured = await this.aiSettingsService.hasConfiguredAI(settings);
+      
+      if (!isConfigured) {
+        console.warn('AI服务未配置，无法初始化');
+        return false;
+      }
+      
+      // 尝试重新初始化
       const result = await this.aiServiceManager.initialize(settings);
       this.initialized = result;
       return result;

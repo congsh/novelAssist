@@ -18,17 +18,31 @@ import { AIEditorService } from './ai-editor-service';
 import { ConsistencyCheckService } from './consistency-check-service';
 import { ContextSearchService } from './context-search-service';
 import { VectorEmbeddingService } from './vector-embedding-service';
+import { AIProviderType } from '../types';
 
 // 准备添加的向量化服务 (待实现)
-// import { VectorEmbeddingService } from './vector-embedding-service';
 // import { VectorSearchService } from './vector-search-service';
 // import { ContextEnhancementService } from './context-enhancement-service';
-// import { ConsistencyCheckService } from './consistency-check-service';
 
 // 获取单例实例
 const aiRequestQueue = new AIRequestQueue();
 const aiSettingsService = AISettingsService.getInstance();
 const chatContextManager = new ChatContextManager();
+
+// 创建服务实例
+const openAIService = new OpenAIService();
+const ollamaService = new OllamaService();
+const deepSeekService = new DeepSeekService();
+const lmStudioService = new LMStudioService();
+const openAICompatibleService = new OpenAICompatibleService();
+
+// 注册服务到服务管理器
+aiServiceManager.registerService(AIProviderType.OPENAI, openAIService);
+aiServiceManager.registerService(AIProviderType.OLLAMA, ollamaService);
+aiServiceManager.registerService(AIProviderType.DEEPSEEK, deepSeekService);
+aiServiceManager.registerService(AIProviderType.LMSTUDIO, lmStudioService);
+aiServiceManager.registerService(AIProviderType.OPENAI_COMPATIBLE, openAICompatibleService);
+
 const vectorEmbeddingService = new VectorEmbeddingService(aiServiceManager, aiRequestQueue);
 
 // 创建依赖于其他服务的服务实例

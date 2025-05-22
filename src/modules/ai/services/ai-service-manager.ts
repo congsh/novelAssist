@@ -9,6 +9,7 @@ import {
   ChatMessage,
   ChatMessageRole
 } from '../types';
+import { AISettingsService } from './ai-settings-service';
 
 /**
  * AI服务管理器
@@ -19,6 +20,11 @@ class AIServiceManager implements AIBaseService {
   private currentService: AIBaseService | null = null;
   private currentProviderId: string | null = null;
   private settings: AISettings | null = null;
+  private aiSettingsService: AISettingsService;
+  
+  constructor() {
+    this.aiSettingsService = AISettingsService.getInstance();
+  }
   
   /**
    * 注册AI服务
@@ -38,11 +44,47 @@ class AIServiceManager implements AIBaseService {
   }
   
   /**
+   * 检查AI是否已配置
+   * @param showDialog 是否显示对话框提示用户配置AI
+   */
+  async checkAIConfigured(showDialog: boolean = true): Promise<boolean> {
+    const hasConfiguredAI = await this.aiSettingsService.hasConfiguredAI(this.settings || undefined);
+    
+    if (!hasConfiguredAI && showDialog) {
+      // 通知UI显示配置提示
+      await window.electron.invoke('dialog:show', {
+        type: 'info',
+        title: 'AI服务未配置',
+        message: '请先在AI设置中配置OpenAI或兼容服务才能使用AI功能',
+        buttons: ['确定']
+      });
+      
+      // 打开AI设置页面
+      await window.electron.invoke('app:navigate', { path: '/settings/ai' });
+    }
+    
+    return hasConfiguredAI;
+  }
+  
+  /**
    * 初始化AI服务
    * @param settings AI设置
    */
   async initialize(settings: AISettings): Promise<boolean> {
     this.settings = settings;
+    
+    // 检查AI是否已配置
+    const isConfigured = await this.aiSettingsService.hasConfiguredAI(settings);
+    if (!isConfigured) {
+      console.warn('AI服务未配置，跳过初始化');
+      return false;
+    }
+    
+    // 检查activeProviderId是否有效
+    if (!settings.activeProviderId || !settings.providers.some(p => p.id === settings.activeProviderId)) {
+      console.error('未找到有效的活动提供商ID');
+      return false;
+    }
     
     // 注册所有提供商中对应的服务(如果尚未注册)
     settings.providers.forEach(provider => {
@@ -62,18 +104,6 @@ class AIServiceManager implements AIBaseService {
     
     if (!service) {
       console.error(`未找到提供商 ${settings.activeProviderId} 的服务实现`);
-      // 尝试使用默认服务
-      if (settings.providers.length > 0 && this.services.size > 0) {
-        // 获取第一个可用的服务
-        const firstServiceKey = Array.from(this.services.keys())[0];
-        const firstService = this.services.get(firstServiceKey);
-        if (firstService) {
-          console.warn(`使用默认服务 ${firstServiceKey} 作为替代`);
-          this.currentService = firstService;
-          this.currentProviderId = firstServiceKey;
-          return true;
-        }
-      }
       return false;
     }
     
@@ -95,6 +125,11 @@ class AIServiceManager implements AIBaseService {
    */
   async getAvailableModels(): Promise<any[]> {
     if (!this.currentService) {
+      // 检查AI是否已配置
+      const isConfigured = await this.checkAIConfigured();
+      if (!isConfigured) {
+        throw new Error('AI服务未配置');
+      }
       throw new Error('AI服务未初始化');
     }
     
@@ -110,6 +145,12 @@ class AIServiceManager implements AIBaseService {
     request: ChatCompletionRequest, 
     scenario?: AIScenario
   ): Promise<ChatCompletionResponse> {
+    // 检查AI是否已配置
+    const isConfigured = await this.checkAIConfigured();
+    if (!isConfigured) {
+      throw new Error('AI服务未配置');
+    }
+    
     const service = this.getServiceForScenario(scenario);
     
     if (!service) {
@@ -133,6 +174,12 @@ class AIServiceManager implements AIBaseService {
     callback: (partialResponse: ChatMessage) => void,
     scenario?: AIScenario
   ): Promise<ChatCompletionResponse> {
+    // 检查AI是否已配置
+    const isConfigured = await this.checkAIConfigured();
+    if (!isConfigured) {
+      throw new Error('AI服务未配置');
+    }
+    
     const service = this.getServiceForScenario(scenario);
     
     if (!service) {

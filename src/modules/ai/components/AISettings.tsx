@@ -147,18 +147,35 @@ const AISettings: React.FC = () => {
         }
       }
       
-      // 创建临时供应商对象
+      // 检查是否有有效的API密钥
+      if (!values.apiKey && [AIProviderType.OPENAI, AIProviderType.DEEPSEEK, AIProviderType.OPENAI_COMPATIBLE].includes(values.type)) {
+        message.error('请输入API密钥');
+        setTesting(false);
+        return;
+      }
+      
+      // 创建临时供应商对象，确保ID不是default-openai
+      const testProviderId = activeProviderId || `temp-provider-${Date.now()}`;
+        
       const testProvider: AIProvider = {
         ...values,
-        id: activeProviderId || 'temp-provider'
+        id: testProviderId
       };
       
       // 创建临时设置对象
       const testSettings = {
         ...settings,
-        activeProviderId: testProvider.id,
+        activeProviderId: testProviderId,
         providers: [testProvider]
       };
+      
+      // 检查AI是否已配置
+      const isConfigured = await aiSettingsService.hasConfiguredAI(testSettings);
+      if (!isConfigured) {
+        message.error('配置不完整，请确保填写了所有必要字段');
+        setTesting(false);
+        return;
+      }
       
       const success = await aiServiceManager.initialize(testSettings);
       
@@ -169,7 +186,7 @@ const AISettings: React.FC = () => {
       }
     } catch (error) {
       console.error('测试连接失败:', error);
-      message.error('连接失败，请检查设置');
+      message.error(`连接失败: ${error instanceof Error ? error.message : '请检查设置'}`);
     } finally {
       setTesting(false);
     }

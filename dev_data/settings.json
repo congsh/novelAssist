@@ -1,60 +1,116 @@
 {
   "ai:settings": {
-    "activeProviderId": "default-openai",
+    "activeProviderId": "ae7642cb-f89e-4103-a7be-a78d460957db",
     "providers": [
       {
-        "id": "default-openai",
-        "name": "OpenAI",
-        "type": "openai",
-        "apiKey": "",
-        "defaultModel": "gpt-3.5-turbo",
-        "temperature": 0.7,
-        "maxTokens": 1000
+        "name": "siliconflow",
+        "type": "openai_compatible",
+        "apiKey": "sk-oqqiixadpcbfyghwwvecfgzcyankamfxombuzleuekguffbf",
+        "baseUrl": "https://api.siliconflow.cn/v1",
+        "id": "ae7642cb-f89e-4103-a7be-a78d460957db"
       }
     ],
-    "models": [],
+    "models": [
+      {
+        "id": "490ad656-8149-44af-b2a9-182b148e68bb",
+        "name": "Qwen/Qwen3-8B",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "description": "Qwen3-8B 是通义千问系列的最新大语言模型",
+        "maxTokens": 100000,
+        "contextWindow": 128000,
+        "capabilities": [
+          "文本生成",
+          "对话",
+          "代码生成",
+          "创意写作"
+        ],
+        "isEmbeddingModel": false
+      },
+      {
+        "id": "8e39a33e-a079-4330-a43a-a6bff21063a0",
+        "name": "BAAI/bge-m3",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "description": "BGE-M3 是一个多功能、多语言、多粒度的文本嵌入模型",
+        "maxTokens": 6000,
+        "contextWindow": 8000,
+        "capabilities": [],
+        "isEmbeddingModel": true
+      }
+    ],
     "scenarioConfigs": {
       "chat": {
         "enabled": true,
-        "providerId": "default-openai",
-        "modelId": "gpt-3.5-turbo",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "modelId": "490ad656-8149-44af-b2a9-182b148e68bb",
         "temperature": 0.7,
-        "maxTokens": 1000
+        "maxTokens": 100000,
+        "systemPrompt": "你是一位专业的小说创作顾问，可以为作者提供创作建议和灵感。",
+        "costLimit": 0
       },
       "novel_collaboration": {
         "enabled": true,
-        "providerId": "default-openai",
-        "modelId": "gpt-3.5-turbo",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "modelId": "490ad656-8149-44af-b2a9-182b148e68bb",
         "temperature": 0.7,
-        "maxTokens": 1000
+        "maxTokens": 100000,
+        "systemPrompt": "你是一位专业的小说创作助手，帮助作者生成高质量的小说内容，包括情节、对话和描写。",
+        "costLimit": 0
       },
       "context_enhancement": {
         "enabled": true,
-        "providerId": "default-openai",
-        "modelId": "gpt-3.5-turbo",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "modelId": "490ad656-8149-44af-b2a9-182b148e68bb",
         "temperature": 0.7,
-        "maxTokens": 1000
+        "maxTokens": 100000,
+        "systemPrompt": "你是一位小说世界观构建专家，帮助作者丰富小说的背景设定和细节描写。",
+        "costLimit": 0
       },
       "novel_analysis": {
         "enabled": true,
-        "providerId": "default-openai",
-        "modelId": "gpt-3.5-turbo",
+        "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+        "modelId": "490ad656-8149-44af-b2a9-182b148e68bb",
         "temperature": 0.7,
-        "maxTokens": 1000
+        "maxTokens": 100000,
+        "systemPrompt": "你是一位文学分析专家，擅长分析小说的结构、人物、主题和写作技巧。",
+        "costLimit": 0
       }
     }
   },
-  "ai:active-provider-id": "default-openai",
+  "ai:active-provider-id": "ae7642cb-f89e-4103-a7be-a78d460957db",
   "ai:providers": [
     {
-      "id": "default-openai",
-      "name": "OpenAI",
-      "type": "openai",
-      "apiKey": "",
-      "defaultModel": "gpt-3.5-turbo",
-      "temperature": 0.7,
-      "maxTokens": 1000
+      "name": "siliconflow",
+      "type": "openai_compatible",
+      "apiKey": "sk-oqqiixadpcbfyghwwvecfgzcyankamfxombuzleuekguffbf",
+      "baseUrl": "https://api.siliconflow.cn/v1",
+      "id": "ae7642cb-f89e-4103-a7be-a78d460957db"
     }
   ],
-  "ai:models": []
+  "ai:models": [
+    {
+      "id": "490ad656-8149-44af-b2a9-182b148e68bb",
+      "name": "Qwen/Qwen3-8B",
+      "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+      "description": "Qwen3-8B 是通义千问系列的最新大语言模型",
+      "maxTokens": 100000,
+      "contextWindow": 128000,
+      "capabilities": [
+        "文本生成",
+        "对话",
+        "代码生成",
+        "创意写作"
+      ],
+      "isEmbeddingModel": false
+    },
+    {
+      "id": "8e39a33e-a079-4330-a43a-a6bff21063a0",
+      "name": "BAAI/bge-m3",
+      "providerId": "ae7642cb-f89e-4103-a7be-a78d460957db",
+      "description": "BGE-M3 是一个多功能、多语言、多粒度的文本嵌入模型",
+      "maxTokens": 6000,
+      "contextWindow": 8000,
+      "capabilities": [],
+      "isEmbeddingModel": true
+    }
+  ]
 }
