@@ -1,5 +1,7 @@
 import { AIProvider, AISettings, AIProviderType, AIModel, AIScenario } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * 默认场景配置

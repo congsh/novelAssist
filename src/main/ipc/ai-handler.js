@@ -4,6 +4,7 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const dbManager = require('../database/db-manager');
 const OpenAI = require('openai');
+const { vectorManager } = require('../database/vector/vector-manager');
 
 let openai = null;
 
@@ -207,6 +208,30 @@ function registerAIHandlers() {
   ipcMain.handle('ai:delete-chat-session', (event, sessionId) => {
     return deleteChatSession(sessionId);
   });
+  
+  // 向量数据库相关处理器 - 确保向量管理器已初始化
+  registerVectorHandlers();
+}
+
+/**
+ * 注册向量数据库相关的IPC处理器
+ */
+function registerVectorHandlers() {
+  try {
+    // 确保向量管理器已初始化
+    if (!vectorManager.initialized) {
+      console.warn('向量管理器未初始化，尝试初始化...');
+      vectorManager.initialize().catch(error => {
+        console.error('向量管理器初始化失败:', error);
+      });
+    }
+    
+    // 注册向量数据库相关处理器
+    // 这些处理器将在vector-manager.js中注册，这里只是确保向量管理器已初始化
+    console.log('已注册向量数据库IPC处理器');
+  } catch (error) {
+    console.error('注册向量数据库处理器失败:', error);
+  }
 }
 
 module.exports = {

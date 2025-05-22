@@ -163,4 +163,7 @@ export class VectorManager {
 }
 
 // 创建单例实例
-export const vectorManager = new VectorManager(); 
+export const vectorManager = new VectorManager();
+
+// 添加CommonJS兼容的导出，确保可以通过require正确导入
+module.exports = { vectorManager, VectorManager }; 

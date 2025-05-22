@@ -6,12 +6,14 @@
   "scripts": {
     "start": "electron .",
     "start:win": "start.bat",
-    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\"",
+    "dev": "concurrently \"npm run dev:react\" \"npm run dev:electron\" \"npm run tsc:watch\"",
     "dev:react": "cross-env NODE_ENV=development webpack serve --config config/webpack.config.js",
     "dev:electron": "cross-env NODE_ENV=development electron .",
-    "build": "cross-env NODE_ENV=production webpack --config config/webpack.config.js",
-    "package": "electron-builder build --win --publish never",
-    "test": "jest"
+    "build": "npm run tsc && cross-env NODE_ENV=production webpack --config config/webpack.config.js",
+    "package": "npm run tsc && electron-builder build --win --publish never",
+    "test": "jest",
+    "tsc": "tsc -p tsconfig.electron.json",
+    "tsc:watch": "tsc -p tsconfig.electron.json --watch"
   },
   "author": "",
   "license": "MIT",

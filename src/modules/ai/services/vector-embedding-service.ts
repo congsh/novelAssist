@@ -90,6 +90,29 @@ export class VectorEmbeddingService {
     
     // 尝试使用合适的服务创建嵌入
     try {
+      // 检查是否配置了AI
+      const aiSettingsService = await import('./ai-settings-service').then(m => m.AISettingsService.getInstance());
+      const settings = this.settings || this.serviceManager.getSettings();
+      
+      if (settings) {
+        const hasConfiguredAI = await aiSettingsService.hasConfiguredAI(settings);
+        
+        if (!hasConfiguredAI) {
+          // 通知UI显示配置提示
+          await window.electron.invoke('dialog:show', {
+            type: 'info',
+            title: 'AI服务未配置',
+            message: '请先在AI设置中配置OpenAI或兼容服务才能使用嵌入功能',
+            buttons: ['确定']
+          });
+          
+          // 打开AI设置页面
+          await window.electron.invoke('app:navigate', { path: '/settings/ai' });
+          
+          throw new Error('AI服务未配置，请先配置AI服务');
+        }
+      }
+      
       // 将请求加入队列，等待处理
       const response = await this.processQueuedRequest(
         'embedding',
