@@ -18,6 +18,7 @@ import { AIEditorService } from './ai-editor-service';
 import { ConsistencyCheckService } from './consistency-check-service';
 import { ContextSearchService } from './context-search-service';
 import { VectorEmbeddingService } from './vector-embedding-service';
+import { EntityVectorService } from './entity-vector-service';
 import { AIProviderType } from '../types';
 
 // 准备添加的向量化服务 (待实现)
@@ -44,6 +45,7 @@ aiServiceManager.registerService(AIProviderType.LMSTUDIO, lmStudioService);
 aiServiceManager.registerService(AIProviderType.OPENAI_COMPATIBLE, openAICompatibleService);
 
 const vectorEmbeddingService = new VectorEmbeddingService(aiServiceManager, aiRequestQueue);
+const entityVectorService = new EntityVectorService(vectorEmbeddingService);
 
 // 创建依赖于其他服务的服务实例
 const chatService = ChatService.getInstance();
@@ -74,6 +76,7 @@ export {
   chatService,
   aiEditorService,
   vectorEmbeddingService,
+  entityVectorService,
   consistencyCheckService,
   contextSearchService,
   initializeAIServices

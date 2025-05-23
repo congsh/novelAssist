@@ -40,7 +40,7 @@ function registerLocationHandlers() {
       // 添加排序
       query += ' ORDER BY created_at DESC';
       
-      const locations = await dbManager.all(query, queryParams);
+      const locations = await dbManager.query(query, queryParams);
       return { success: true, data: locations };
     } catch (error) {
       console.error('获取地点列表失败:', error);
@@ -217,7 +217,7 @@ function registerLocationHandlers() {
       }
 
       // 获取指定小说的所有地点
-      const locations = await dbManager.all(
+      const locations = await dbManager.query(
         'SELECT * FROM locations WHERE novel_id = ? ORDER BY importance ASC',
         [novelId]
       );

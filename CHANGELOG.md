@@ -10,13 +10,93 @@
 - 添加工作链系统基础架构
 - 创建上下文处理框架
 - 添加内容分析模块目录结构
+- **完成实体向量化系统**：
+  - 创建EntityVectorService实体向量化服务
+  - 实现人物、地点、大纲和时间线的向量化处理
+  - 添加批量向量化功能，支持实时进度跟踪
+  - 实现实体向量的相似度查询和搜索功能
+  - 创建EntityVectorManager管理界面组件
+  - 添加向量数据清理和测试查询功能
+  - 支持多种实体类型的统一向量化管理
+- **实体向量化管理界面**：
+  - 在AI助手页面添加"实体向量化"标签页
+  - 提供直接向量化功能，支持按小说和实体类型批量处理
+  - 实现向量化数据展示页面，包含状态统计和数据筛选
+  - 支持查看向量化详情、重新向量化和删除操作
+  - 添加向量化进度实时显示和错误处理
+- **数据库支持**：
+  - 创建vectorized_entities表存储向量化记录
+  - 添加向量化相关IPC处理器支持数据操作
+  - 实现批量保存和查询向量化实体数据
+  - 支持按小说、实体类型和状态筛选向量化记录
 
 ### 修改
 - 重构AI服务目录结构，按照新设计分类
 - 更新向量嵌入服务，支持新的Agent系统
 - 优化AI类型定义，增加Agent和工作链相关类型
+- 更新AI服务索引文件，导出EntityVectorService
 
 ### 修复
+- **修复了实体向量化系统模型选择问题**：
+  - 解决了在用户已配置embedding模型的情况下，系统仍然下载本地模型的问题
+  - 修复了VectorEmbeddingService在EntityVectorManager中未正确初始化的问题
+  - 现在系统会优先使用用户配置的在线embedding模型（如BAAI/bge-m3）
+  - 只有在无法获取配置或配置无效时才回退到本地all-MiniLM-L6-v2模型
+  - 添加了详细的日志输出，帮助用户了解模型选择过程
+- **完全解决了IPC处理器注册问题**：
+  - 修复了删除handlers.js文件后导致的多个IPC处理器缺失问题
+  - 更新index.js中的处理器导入路径，指向正确的文件名
+  - 修复了函数名不匹配问题，使用正确的导出函数名：
+    - `initOutlineHandlers` (outline-handler.js)
+    - `initTimelineHandlers` (timeline-handler.js)  
+    - `initStatisticsHandlers` (statistics-handler.js)
+    - `initBackupHandlers` (backup-handler.js)
+    - `initNovelAssociationHandlers` (novel-association-handler.js)
+  - 删除了重复的处理器文件（character-handler.js、location-handler.js）
+  - 移除了outline-handler.js中的自动函数调用，确保统一通过index.js控制
+  - **清理了main.js中混乱的IPC处理器注册代码**：
+    - 移除了对已删除文件的引用（如location-handler.js）
+    - 删除了分散的处理器注册逻辑
+    - 统一使用registerIpcHandlers()进行集中注册
+    - 解决了"Cannot find module './ipc/location-handler'"错误
+  - **深度调试和修复了处理器内部问题**：
+    - 移除了novel-handler.js文件末尾的自动执行代码`registerNovelHandlers()`
+    - 修复了ai-handler.js中重复调用registerVectorHandlers的问题
+    - 修复了vector-handler.js的错误导入路径：`database-manager` → `db-manager`
+    - 统一了vector-handler.js的数据库API调用，使用`dbManager.query()`和`dbManager.run()`
+    - 解决了所有处理器文件的依赖和初始化问题
+  - **修复了地点功能的数据库API调用错误**：
+    - 修复了location-handlers.js中使用错误的`dbManager.all()`方法的问题
+    - 将所有数据库查询调用统一为正确的`dbManager.query()`方法
+    - 解决了"TypeError: dbManager.all is not a function"错误
+    - 确保地点列表获取和地图数据获取功能正常工作
+  - **创建了应用相关IPC处理器**：
+    - 创建新的app-handler.js文件处理应用相关的IPC调用
+    - 注册`dialog:show`处理器，支持在主进程中显示对话框
+    - 注册`app:navigate`处理器，支持应用内导航功能
+    - 添加`app:get-info`、`app:restart`、`app:quit`等应用管理功能
+    - 解决了"No handler registered for 'dialog:show'"错误
+    - 修复了AI服务配置提示对话框无法显示的问题
+  - **添加了缺失的章节相关IPC处理器**：
+    - 在novel-handler.js中添加`get-chapter-content`处理器，支持编辑器获取章节内容
+    - 在novel-handler.js中添加`update-chapter-content`处理器，支持编辑器更新章节内容
+    - 这些处理器专门为编辑器服务提供优化的数据格式和性能
+    - 修复了编辑器服务中章节内容获取和更新功能
+  - 修复了所有IPC处理器注册问题，解决了以下错误：
+    - "No handler registered for 'get-novels'"
+    - "No handler registered for 'settings:get'"
+    - "No handler registered for 'get-characters'"
+    - "No handler registered for 'get-locations'"
+    - "No handler registered for 'get-outline-tree'"
+    - "No handler registered for 'get-timeline-events'"
+    - "No handler registered for 'get-overall-statistics'"
+    - "No handler registered for 'get-writing-activity'"
+    - "No handler registered for 'get-writing-time'"
+    - "No handler registered for 'get-novel-characters'"
+    - "No handler registered for 'get-novel-locations'"
+    - "No handler registered for 'get-novel-outlines'"
+    - "No handler registered for 'get-novel-timeline-events'"
+    - "No handler registered for 'get-novel-statistics'"
 - 修复了SiliconFlow API嵌入功能400错误，使用正确的嵌入模型名称'BAAI/bge-large-zh-v1.5'替代默认的'text-embedding-ada-002'
 - 增加了SiliconFlow API请求的详细日志输出，便于调试
 - 添加了encoding_format参数，确保与SiliconFlow API规范兼容
@@ -315,4 +395,33 @@
 
 ## [0.3.0] - 2025-05-15
 
-// ... 现有内容 ...
+## [2024-01-24] - 模型下载管理和用户体验改进
+
+### 新增
+- 添加了模型下载前的确认提示功能
+- 创建了 ModelManager 组件用于管理AI嵌入模型
+- 在AI设置页面添加了"嵌入模型"标签页
+- 支持预下载模型以避免使用时的等待
+- **智能embedding模型选择**：
+  - 测试功能现在会自动检测用户配置的embedding模型
+  - 优先使用在线API的embedding模型（如OpenAI、DeepSeek等）
+  - 只有在未配置在线模型时才回退到本地模型下载
+  - 在ModelManager中显示当前embedding模型配置状态
+
+### 修改
+- 改进了实体向量化测试的用户体验
+- 为所有测试功能添加了明确的下载警告
+- 优化了测试进度提示和错误处理
+- 将对话模型和嵌入模型分开管理
+- **优化了模型选择逻辑**：
+  - 修改EntityVectorServiceTest以动态获取可用的embedding模型
+  - 更新确认提示，说明可通过配置在线API避免下载
+  - 改进模型配置检查，支持多种AI服务提供商
+
+### 修复
+- 解决了用户在不知情情况下被迫下载大文件的问题
+- 改进了测试失败时的错误提示
+- 修复了测试代码中硬编码OpenAI模型的问题
+- 解决了AIProvider类型定义中models字段访问错误
+
+## [2024-01-23] - 实体向量化系统完成

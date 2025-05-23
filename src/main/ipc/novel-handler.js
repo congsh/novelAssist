@@ -201,6 +201,66 @@ function registerNovelHandlers() {
     }
   });
 
+  // 获取章节内容（编辑器专用）
+  ipcMain.handle('get-chapter-content', async (event, { id }) => {
+    try {
+      const chapter = await dbManager.get(`
+        SELECT id, novel_id, title, content, word_count, updated_at
+        FROM chapters
+        WHERE id = ?
+      `, [id]);
+      
+      if (!chapter) {
+        return { success: false, error: '章节不存在' };
+      }
+      
+      return { success: true, data: chapter };
+    } catch (error) {
+      console.error('获取章节内容失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // 更新章节内容（编辑器专用）
+  ipcMain.handle('update-chapter-content', async (event, { id, content }) => {
+    try {
+      const chapter = await dbManager.get('SELECT * FROM chapters WHERE id = ?', [id]);
+      
+      if (!chapter) {
+        return { success: false, error: '章节不存在' };
+      }
+      
+      const now = new Date().toISOString();
+      const wordCount = content ? content.length : 0;
+      
+      await dbManager.run(`
+        UPDATE chapters
+        SET content = ?, word_count = ?, updated_at = ?
+        WHERE id = ?
+      `, [content, wordCount, now, id]);
+      
+      // 更新小说的更新时间
+      await dbManager.run(`
+        UPDATE novels
+        SET updated_at = ?
+        WHERE id = ?
+      `, [now, chapter.novel_id]);
+      
+      return { 
+        success: true, 
+        data: { 
+          id, 
+          content,
+          word_count: wordCount,
+          updated_at: now 
+        } 
+      };
+    } catch (error) {
+      console.error('更新章节内容失败:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
   // 创建新章节
   ipcMain.handle('create-chapter', async (event, chapterData) => {
     try {
@@ -1397,9 +1457,6 @@ function registerNovelHandlers() {
     }
   });
 }
-
-// 立即注册所有处理器
-registerNovelHandlers();
 
 module.exports = {
   // 导出函数以便需要时重新注册

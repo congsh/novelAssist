@@ -9,13 +9,18 @@ import {
   StopOutlined,
   PlusOutlined,
   LoadingOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  BugOutlined,
+  DatabaseOutlined
 } from '@ant-design/icons';
 import { chatService } from '../../modules/ai/services/chat-service';
 import AISettings from '../../modules/ai/components/AISettings';
 import ChatSessionList from '../../modules/ai/components/ChatSessionList';
 import CreativePrompts from '../../modules/ai/components/CreativePrompts';
+import { EntityVectorManager } from './EntityVectorManager';
 import { ChatMessage, ChatMessageRole, ChatSession, AIScenario } from '../../modules/ai/types';
+import { runEntityVectorTests } from '../../modules/ai/services/entity-vector-service.test';
+import { vectorEmbeddingService } from '../../modules/ai/services';
 
 const { Title, Paragraph, Text } = Typography;
 const { TextArea } = Input;
@@ -308,6 +313,40 @@ const AIAssistantPage: React.FC = () => {
     );
   };
 
+  // 运行实体向量化测试
+  const handleRunVectorTests = async () => {
+    try {
+      // 显示下载提示
+      const confirmed = await new Promise((resolve) => {
+        window.electron.invoke('dialog:show', {
+          type: 'warning',
+          title: '测试前确认',
+          message: '运行实体向量化测试可能需要下载AI嵌入模型文件。\n\n如果您已在AI设置中配置了embedding模型（如OpenAI、DeepSeek等），将使用在线API，无需下载。\n\n如果未配置embedding模型，系统会下载本地 all-MiniLM-L6-v2 模型（约79MB）。\n\n建议：\n• 方案一：在AI设置中配置embedding模型\n• 方案二：确认下载本地模型\n\n是否继续测试？',
+          buttons: ['取消', '继续测试']
+        }).then((result: any) => {
+          resolve(result.response === 1);
+        });
+      });
+
+      if (!confirmed) {
+        console.log('用户取消了测试');
+        return;
+      }
+
+      console.log('开始运行实体向量化测试...');
+      message.loading('正在初始化测试环境...', 0);
+      
+      await runEntityVectorTests(vectorEmbeddingService);
+      
+      message.destroy();
+      message.success('测试完成，请查看控制台输出');
+    } catch (error) {
+      message.destroy();
+      console.error('测试运行失败:', error);
+      message.error('测试运行失败，请查看控制台');
+    }
+  };
+
   // Tabs配置
   const tabItems = [
     {
@@ -408,6 +447,11 @@ const AIAssistantPage: React.FC = () => {
       children: <CreativePrompts onUsePrompt={usePrompt} />
     },
     {
+      key: 'entityVectorManager',
+      label: <><DatabaseOutlined /> 实体向量化</>,
+      children: <EntityVectorManager />
+    },
+    {
       key: 'settings',
       label: <><SettingOutlined /> 设置</>,
       children: <AISettings />
@@ -423,6 +467,17 @@ const AIAssistantPage: React.FC = () => {
         tabBarStyle={{ marginBottom: '8px' }}
           items={tabItems} 
         />
+        {process.env.NODE_ENV === 'development' && (
+          <Card title="开发者工具" style={{ marginTop: 16 }}>
+            <Button 
+              type="dashed" 
+              icon={<BugOutlined />}
+              onClick={handleRunVectorTests}
+            >
+              运行实体向量化测试
+            </Button>
+          </Card>
+        )}
     </div>
   );
 };

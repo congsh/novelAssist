@@ -169,28 +169,9 @@ app.whenReady().then(async () => {
     // 向量数据库初始化失败不影响应用其他功能的使用
   }
   
-  // 加载IPC处理器 - 这些模块会自动注册处理器
-  require('./ipc/novel-handler');
-  const { registerAIHandlers } = require('./ipc/ai-handler');
-  registerAIHandlers(); // 确保调用AI处理器注册函数
-  require('./ipc/location-handler');
-  require('./ipc/outline-handler');
-
-  // 初始化其他IPC处理器
-  const { initCharacterHandlers } = require('./ipc/character-handler');
-  const { initTimelineHandlers } = require('./ipc/timeline-handler');
-  const { initNovelAssociationHandlers } = require('./ipc/novel-association-handler');
-  const { initBackupHandlers } = require('./ipc/backup-handler');
-  const { initStatisticsHandlers } = require('./ipc/statistics-handler');
-  const { registerSettingsHandlers } = require('./ipc/settings-handler');
-
-  // 分别初始化各模块处理器
-  initCharacterHandlers();
-  initTimelineHandlers();
-  initNovelAssociationHandlers();
-  initBackupHandlers();
-  initStatisticsHandlers();
-  registerSettingsHandlers();
+  // 统一注册所有IPC处理器
+  const { registerIpcHandlers } = require('./ipc/index');
+  registerIpcHandlers();
 
   // 设置应用菜单
   setupMenu();

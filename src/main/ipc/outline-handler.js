@@ -348,9 +348,6 @@ function initOutlineHandlers() {
   });
 }
 
-// 初始化处理器
-initOutlineHandlers();
-
 module.exports = {
   initOutlineHandlers
 }; 

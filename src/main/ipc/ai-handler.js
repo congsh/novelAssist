@@ -208,9 +208,6 @@ function registerAIHandlers() {
   ipcMain.handle('ai:delete-chat-session', (event, sessionId) => {
     return deleteChatSession(sessionId);
   });
-  
-  // 向量数据库相关处理器 - 确保向量管理器已初始化
-  registerVectorHandlers();
 }
 
 /**

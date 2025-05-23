@@ -28,13 +28,15 @@ import {
   SlidersOutlined,
   PlusOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  DownloadOutlined
 } from '@ant-design/icons';
 import { AIProviderType, AIProvider } from '../types';
 import { AISettingsService } from '../services/ai-settings-service';
 import { aiServiceManager } from '../services';
 import AIModelManager from './AIModelManager';
 import AIScenarioSettings from './AIScenarioSettings';
+import { ModelManager } from '../../../renderer/components/ModelManager';
 import { v4 as uuidv4 } from 'uuid';
 
 const { Option } = Select;
@@ -535,8 +537,11 @@ const AISettings: React.FC = () => {
       </Row>
         
       <Tabs defaultActiveKey="models" style={{ marginTop: 16 }}>
-        <TabPane tab={<span><AppstoreOutlined /> 模型管理</span>} key="models">
+        <TabPane tab={<span><AppstoreOutlined /> 对话模型</span>} key="models">
               <AIModelManager />
+        </TabPane>
+        <TabPane tab={<span><DownloadOutlined /> 嵌入模型</span>} key="embeddings">
+              <ModelManager />
         </TabPane>
         <TabPane tab={<span><SlidersOutlined /> 场景设置</span>} key="scenarios">
               <AIScenarioSettings />
