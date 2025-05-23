@@ -16,6 +16,41 @@
 - 更新向量嵌入服务，支持新的Agent系统
 - 优化AI类型定义，增加Agent和工作链相关类型
 
+### 修复
+- 修复了SiliconFlow API嵌入功能400错误，使用正确的嵌入模型名称'BAAI/bge-large-zh-v1.5'替代默认的'text-embedding-ada-002'
+- 增加了SiliconFlow API请求的详细日志输出，便于调试
+- 添加了encoding_format参数，确保与SiliconFlow API规范兼容
+- 改进了错误响应处理，输出详细的错误信息便于问题定位
+- 移除了硬编码的默认嵌入模型，现在要求用户在AI设置中配置嵌入模型
+- 改进了嵌入模型查找逻辑，当没有配置嵌入模型时给出明确的配置指导
+- 优化了向量嵌入服务的错误提示，指导用户到正确的配置页面
+- 修复了向量嵌入服务中的类型检查问题，确保代码健壮性
+- 修复了Chroma向量数据库元数据格式错误，添加元数据扁平化处理，确保所有元数据值都是基本类型
+- 解决了向量保存时"Expected metadata value to be a str, int, float, bool, or None"错误
+- **修复了向量数据库保存超时问题**：
+  - 修复了向量嵌入服务未正确传递向量数据到Chroma数据库的问题
+  - 在保存向量时现在会正确传递SiliconFlow API生成的embedding数据
+  - 修改了VectorService.createEmbedding和createEmbeddingBatch方法，支持接收实际的向量数据
+  - 更新了IPC处理器，确保向量数据能正确从渲染进程传递到主进程再到Python Chroma服务
+  - 解决了"The read operation timed out in add"错误，现在向量保存速度大幅提升
+- **修复了Chroma向量数据库元数据null值错误**：
+  - 修复了元数据中包含null值导致的"'NoneType' object cannot be converted to 'PyBool'"等错误
+  - 改进了flattenMetadata函数，完全过滤掉null和undefined值，只保留Chroma支持的基本类型
+  - 在saveToVectorStore和saveToVectorStoreBatch方法中添加额外的元数据验证
+  - 确保所有发送给Chroma的元数据值都是string、number或boolean类型
+  - 为基础元数据字段提供有效的默认值，避免空值问题
+- **修复了Chroma向量数据库查询条件格式错误**：
+  - 修复了删除和查询操作中的"Expected where operator to be one of $gt, $gte, $lt, $lte, $ne, $eq, $in, $nin"错误
+  - 更新所有查询方法使用正确的Chroma操作符格式（如{"field": {"$eq": "value"}}）
+  - 修复了deleteChapterChunks、querySimilarContent等方法的查询条件
+  - 适配元数据扁平化后的字段名格式（如"additionalContext_chapterId"）
+  - 确保所有向量查询和删除操作符合Chroma数据库要求
+- 修复了向量服务进程终止问题：改进了Python进程终止逻辑，避免进程残留导致的端口冲突
+- 解决了Windows系统下日志乱码问题：使用正确的GBK/CP936编码处理Windows命令输出，避免中文字符显示为乱码
+- 增强了进程管理的健壮性：添加进程存在性检查，避免尝试终止已经退出的进程
+- 优化了端口占用检测和清理：使用buffer编码和正确的解码方式处理netstat和taskkill命令输出
+- 改进了错误处理机制：对于"找不到进程"等常见错误提供更友好的日志输出
+
 ## [未发布] - 2025-06-02
 
 ### 新增

@@ -268,41 +268,22 @@ class VectorService {
                         logger_1.default.info(`已发送终止信号到进程 ${pid}`);
                         // 设置一个标志，表示进程已被请求终止
                         this.pythonProcess._terminationRequested = true;
-                        // 使用taskkill作为备用方案
-                        const { execSync } = require('child_process');
-                        try {
-                            // 使用同步执行并设置编码，避免乱码
-                            const result = execSync(`taskkill /pid ${pid} /f /t`, {
-                                encoding: 'utf8',
-                                windowsHide: true,
-                                timeout: 2000 // 2秒超时
-                            });
-                            logger_1.default.info(`taskkill执行结果: ${result.trim()}`);
-                        }
-                        catch (taskKillError) {
-                            // 如果进程已经不存在，这是正常的
-                            if (taskKillError.status === 128 && taskKillError.stdout && taskKillError.stdout.includes('没有找到该进程')) {
-                                logger_1.default.info(`进程 ${pid} 已经终止`);
-                            }
-                            else {
-                                logger_1.default.warn(`taskkill执行出错: ${taskKillError.message}`);
-                                if (taskKillError.stdout) {
-                                    logger_1.default.warn(`taskkill stdout: ${taskKillError.stdout}`);
-                                }
-                                if (taskKillError.stderr) {
-                                    logger_1.default.warn(`taskkill stderr: ${taskKillError.stderr}`);
-                                }
-                            }
-                        }
+                        // 等待一段时间让进程自然退出
+                        setTimeout(() => {
+                            // 检查进程是否还存在
+                            this.forceKillProcess(pid);
+                        }, 2000);
                     }
                     catch (killError) {
                         const err = killError instanceof Error ? killError : new Error(String(killError));
                         logger_1.default.warn(`直接终止进程失败: ${err.message}`);
+                        // 如果直接kill失败，立即尝试强制终止
+                        this.forceKillProcess(pid);
                     }
                     // 检查端口占用，使用更可靠的方式
                     setTimeout(() => {
                         this.checkAndCleanPort(this.actualPort);
-                    }, 1000);
+                    }, 3000);
                 }
                 else {
                     // Unix平台可以直接kill
@@ -346,6 +327,98 @@ class VectorService {
         }
     }
     /**
+     * 强制终止进程
+     * @param pid 进程ID
+     */
+    forceKillProcess(pid) {
+        if (!pid)
+            return;
+        try {
+            const { execSync } = require('child_process');
+            // 首先检查进程是否还存在
+            try {
+                const checkResult = execSync(`tasklist /FI "PID eq ${pid}" /FO CSV /NH`, {
+                    encoding: 'buffer',
+                    windowsHide: true,
+                    timeout: 3000
+                });
+                // 转换为UTF-8字符串，处理中文编码
+                const checkOutput = this.decodeWindowsOutput(checkResult);
+                if (!checkOutput || checkOutput.includes('没有运行的任务匹配指定标准') || checkOutput.trim() === '') {
+                    logger_1.default.info(`进程 ${pid} 已经不存在，无需强制终止`);
+                    return;
+                }
+                logger_1.default.info(`进程 ${pid} 仍在运行，执行强制终止`);
+            }
+            catch (checkError) {
+                // tasklist命令可能失败，继续尝试终止
+                logger_1.default.debug(`检查进程状态失败，继续尝试终止进程 ${pid}`);
+            }
+            // 使用taskkill强制终止进程
+            try {
+                const killResult = execSync(`taskkill /pid ${pid} /f /t`, {
+                    encoding: 'buffer',
+                    windowsHide: true,
+                    timeout: 5000
+                });
+                const killOutput = this.decodeWindowsOutput(killResult);
+                logger_1.default.info(`强制终止进程成功: ${killOutput.trim()}`);
+            }
+            catch (taskKillError) {
+                // 转换错误输出
+                const errorOutput = this.decodeWindowsOutput(taskKillError.stdout || Buffer.alloc(0));
+                const errorStderr = this.decodeWindowsOutput(taskKillError.stderr || Buffer.alloc(0));
+                // 如果进程已经不存在，这是正常的
+                if (taskKillError.status === 128 ||
+                    errorOutput.includes('没有找到该进程') ||
+                    errorStderr.includes('没有找到该进程')) {
+                    logger_1.default.info(`进程 ${pid} 已经终止`);
+                }
+                else {
+                    logger_1.default.warn(`强制终止进程失败 (退出码: ${taskKillError.status}): ${taskKillError.message}`);
+                    if (errorOutput.trim()) {
+                        logger_1.default.warn(`taskkill stdout: ${errorOutput.trim()}`);
+                    }
+                    if (errorStderr.trim()) {
+                        logger_1.default.warn(`taskkill stderr: ${errorStderr.trim()}`);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            const err = error instanceof Error ? error : new Error(String(error));
+            logger_1.default.error(`强制终止进程 ${pid} 失败:`, err);
+        }
+    }
+    /**
+     * 解码Windows命令输出，处理中文编码问题
+     * @param buffer 命令输出的Buffer
+     * @returns 解码后的字符串
+     */
+    decodeWindowsOutput(buffer) {
+        if (!buffer || buffer.length === 0)
+            return '';
+        try {
+            // 尝试使用 GBK 编码解码（Windows中文系统默认编码）
+            const iconv = require('iconv-lite');
+            if (iconv.encodingExists('gbk')) {
+                return iconv.decode(buffer, 'gbk');
+            }
+        }
+        catch (error) {
+            // 如果iconv-lite不可用，fallback到其他方法
+            logger_1.default.debug('iconv-lite不可用，使用fallback解码方法');
+        }
+        try {
+            // 尝试使用cp936编码（GBK的别名）
+            return buffer.toString('binary');
+        }
+        catch (error) {
+            // 最后fallback到UTF-8
+            return buffer.toString('utf8');
+        }
+    }
+    /**
      * 检查端口占用并清理
      * 使用更可靠的方式检查和清理端口
      */
@@ -355,12 +428,13 @@ class VectorService {
         try {
             const { execSync } = require('child_process');
             try {
-                // 使用同步执行并设置编码，避免乱码
-                const stdout = execSync(`netstat -ano | findstr :${port}`, {
-                    encoding: 'utf8',
+                // 使用buffer编码避免乱码问题
+                const stdoutBuffer = execSync(`netstat -ano | findstr :${port}`, {
+                    encoding: 'buffer',
                     windowsHide: true,
-                    timeout: 2000 // 2秒超时
+                    timeout: 3000
                 });
+                const stdout = this.decodeWindowsOutput(stdoutBuffer);
                 if (stdout && stdout.includes(`:${port}`)) {
                     logger_1.default.warn(`端口 ${port} 仍被占用，尝试进一步清理...`);
                     // 提取PID并尝试杀死进程
@@ -376,23 +450,28 @@ class VectorService {
                             }
                             logger_1.default.warn(`尝试杀死占用端口的进程，PID: ${remainingPid}`);
                             try {
-                                const killResult = execSync(`taskkill /F /PID ${remainingPid} /T`, {
-                                    encoding: 'utf8',
+                                const killResultBuffer = execSync(`taskkill /F /PID ${remainingPid} /T`, {
+                                    encoding: 'buffer',
                                     windowsHide: true,
-                                    timeout: 2000
+                                    timeout: 3000
                                 });
+                                const killResult = this.decodeWindowsOutput(killResultBuffer);
                                 logger_1.default.info(`已杀死残留进程: ${killResult.trim()}`);
                             }
                             catch (err) {
-                                if (err.status === 128 && err.stdout && err.stdout.includes('没有找到该进程')) {
+                                const errorOutput = this.decodeWindowsOutput(err.stdout || Buffer.alloc(0));
+                                const errorStderr = this.decodeWindowsOutput(err.stderr || Buffer.alloc(0));
+                                if (err.status === 128 ||
+                                    errorOutput.includes('没有找到该进程') ||
+                                    errorStderr.includes('没有找到该进程')) {
                                     logger_1.default.info(`进程 ${remainingPid} 已经终止`);
                                 }
                                 else {
                                     logger_1.default.error(`杀死残留进程失败: ${err.message}`);
-                                    if (err.stdout)
-                                        logger_1.default.error(`stdout: ${err.stdout}`);
-                                    if (err.stderr)
-                                        logger_1.default.error(`stderr: ${err.stderr}`);
+                                    if (errorOutput.trim())
+                                        logger_1.default.error(`stdout: ${errorOutput.trim()}`);
+                                    if (errorStderr.trim())
+                                        logger_1.default.error(`stderr: ${errorStderr.trim()}`);
                                 }
                             }
                         }
@@ -406,6 +485,9 @@ class VectorService {
                 // netstat命令可能失败，这不是严重错误
                 if (error.status !== 1) { // 状态码1通常表示没有找到匹配项，这是正常的
                     logger_1.default.debug(`检查端口占用出错: ${error.message}`);
+                }
+                else {
+                    logger_1.default.info(`端口 ${port} 未被占用或已释放`);
                 }
             }
         }
@@ -457,11 +539,17 @@ class VectorService {
      * @param text 文本内容
      * @param metadata 元数据
      * @param collectionName 集合名称
+     * @param embedding 可选的向量数据，如果提供则直接使用
      */
-    async createEmbedding(id, text, metadata = {}, collectionName = 'default') {
+    async createEmbedding(id, text, metadata = {}, collectionName = 'default', embedding) {
         await this.ensureReady();
         try {
-            const data = { id, text, metadata };
+            const data = {
+                id,
+                text,
+                metadata,
+                embedding // 传递向量数据（如果有）
+            };
             await this.httpRequest(`/embed?collection_name=${collectionName}`, 'POST', data);
         }
         catch (error) {
@@ -476,14 +564,16 @@ class VectorService {
      * @param texts 文本数组
      * @param metadatas 元数据数组
      * @param collectionName 集合名称
+     * @param embeddings 可选的向量数据数组，如果提供则直接使用
      */
-    async createEmbeddingBatch(ids, texts, metadatas = [], collectionName = 'default') {
+    async createEmbeddingBatch(ids, texts, metadatas = [], collectionName = 'default', embeddings) {
         await this.ensureReady();
         try {
             const data = {
                 ids,
                 texts,
-                metadatas: metadatas.length > 0 ? metadatas : undefined
+                metadatas: metadatas.length > 0 ? metadatas : undefined,
+                embeddings // 传递向量数据数组（如果有）
             };
             await this.httpRequest(`/embed_batch?collection_name=${collectionName}`, 'POST', data);
         }

@@ -43,4 +43,8 @@ Thumbs.db
 .cache/
 .temp/
 
+# 向量化数据
+vector_db/
+
+
 

@@ -332,11 +332,10 @@ export class ChapterVectorizationService {
   private async deleteChapterChunks(chapterId: string): Promise<boolean> {
     try {
       // 使用向量数据库的过滤功能删除指定章节的所有分块
+      // 由于元数据被扁平化，chapterId现在是顶级字段，需要使用$eq操作符
       await window.electron.invoke('vector:delete-by-filter', {
         where: { 
-          additionalContext: { 
-            chapterId 
-          } 
+          "additionalContext_chapterId": { "$eq": chapterId }
         },
         collectionName: this.chunkCollectionName
       });
@@ -431,11 +430,9 @@ export class ChapterVectorizationService {
     limit: number = 5
   ): Promise<any[]> {
     try {
-      // 查询相似的章节分块
+      // 查询相似的章节分块，使用正确的操作符格式
       const filter = { 
-        additionalContext: { 
-          chapterId 
-        } 
+        "additionalContext_chapterId": { "$eq": chapterId }
       };
       const results = await this.vectorService.querySimilar(
         queryText,
@@ -463,8 +460,10 @@ export class ChapterVectorizationService {
     limit: number = 5
   ): Promise<any[]> {
     try {
-      // 查询相似的章节分块
-      const filter = { novelId };
+      // 查询相似的章节分块，使用正确的操作符格式
+      const filter = { 
+        "novelId": { "$eq": novelId }
+      };
       const results = await this.vectorService.querySimilar(
         queryText,
         filter,
@@ -493,12 +492,10 @@ export class ChapterVectorizationService {
     limit: number = 5
   ): Promise<any[]> {
     try {
-      // 查询相似的章节分块，按类型过滤
+      // 查询相似的章节分块，按类型过滤，使用正确的操作符格式
       const filter = { 
-        additionalContext: { 
-          chapterId,
-          chunkType
-        } 
+        "additionalContext_chapterId": { "$eq": chapterId },
+        "additionalContext_chunkType": { "$eq": chunkType }
       };
       
       const results = await this.vectorService.querySimilar(
@@ -529,12 +526,10 @@ export class ChapterVectorizationService {
     limit: number = 5
   ): Promise<any[]> {
     try {
-      // 查询相似的章节分块，按类型过滤
+      // 查询相似的章节分块，按小说和类型过滤，使用正确的操作符格式
       const filter = { 
-        novelId,
-        additionalContext: {
-          chunkType
-        }
+        "novelId": { "$eq": novelId },
+        "additionalContext_chunkType": { "$eq": chunkType }
       };
       
       const results = await this.vectorService.querySimilar(
@@ -546,7 +541,7 @@ export class ChapterVectorizationService {
       
       return results;
     } catch (error) {
-      console.error(`[ChapterVectorizationService] 按类型查询小说相似内容出错:`, error);
+      console.error(`[ChapterVectorizationService] 按小说和类型查询相似内容出错:`, error);
       return [];
     }
   }

@@ -56,8 +56,8 @@ export class VectorManager {
     // 创建单个文本embedding
     ipcMain.handle('vector:create-embedding', async (_, args) => {
       try {
-        const { id, text, metadata, collectionName } = args;
-        await this.vectorService.createEmbedding(id, text, metadata, collectionName);
+        const { id, text, metadata, collectionName, embedding } = args;
+        await this.vectorService.createEmbedding(id, text, metadata, collectionName, embedding);
         return { success: true };
       } catch (error) {
         logger.error('创建embedding失败:', error as Error);
@@ -68,8 +68,8 @@ export class VectorManager {
     // 批量创建文本embedding
     ipcMain.handle('vector:create-embedding-batch', async (_, args) => {
       try {
-        const { ids, texts, metadatas, collectionName } = args;
-        await this.vectorService.createEmbeddingBatch(ids, texts, metadatas, collectionName);
+        const { ids, texts, metadatas, collectionName, embeddings } = args;
+        await this.vectorService.createEmbeddingBatch(ids, texts, metadatas, collectionName, embeddings);
         return { success: true };
       } catch (error) {
         logger.error('批量创建embedding失败:', error as Error);

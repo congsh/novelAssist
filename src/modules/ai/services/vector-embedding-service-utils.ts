@@ -11,6 +11,50 @@ import {
  */
 export class VectorEmbeddingUtils {
   /**
+   * 扁平化元数据，确保所有值都是Chroma支持的基本类型
+   * @param metadata 原始元数据
+   * @returns 扁平化的元数据
+   */
+  public static flattenMetadata(metadata: any): Record<string, string | number | boolean> {
+    const flattened: Record<string, string | number | boolean> = {};
+    
+    const flatten = (obj: any, prefix = '') => {
+      for (const [key, value] of Object.entries(obj)) {
+        const newKey = prefix ? `${prefix}_${key}` : key;
+        
+        if (value === null || value === undefined) {
+          // 跳过null和undefined值，不添加到结果中
+          continue;
+        } else if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+          flattened[newKey] = value;
+        } else if (value instanceof Date) {
+          flattened[newKey] = value.toISOString();
+        } else if (Array.isArray(value)) {
+          // 数组转换为字符串，但只有非空数组才添加
+          if (value.length > 0) {
+            flattened[newKey] = JSON.stringify(value);
+          }
+        } else if (typeof value === 'object') {
+          // 递归扁平化对象
+          flatten(value, newKey);
+        } else {
+          // 其他类型转换为字符串，但确保不是空字符串
+          const stringValue = String(value);
+          if (stringValue && stringValue !== 'null' && stringValue !== 'undefined') {
+            flattened[newKey] = stringValue;
+          }
+        }
+      }
+    };
+    
+    if (metadata && typeof metadata === 'object') {
+      flatten(metadata);
+    }
+    
+    return flattened;
+  }
+
+  /**
    * 创建向量嵌入对象
    * @param text 文本内容
    * @param vector 向量数组
@@ -31,22 +75,36 @@ export class VectorEmbeddingUtils {
       additionalContext?: any;
     }>
   ): VectorEmbedding {
+    // 准备基本元数据，确保所有值都不为空
+    const baseMetadata = {
+      sourceId: metadata.sourceId || 'unknown',
+      sourceType: metadata.sourceType || 'text',
+      novelId: metadata.novelId || 'unknown',
+      title: metadata.title || '',
+      createdAt: metadata.createdAt || Date.now(),
+      updatedAt: metadata.updatedAt || Date.now(),
+      section: metadata.section || ''
+    };
+    
+    // 处理额外的上下文数据
+    let flattenedAdditionalContext = {};
+    if (metadata.additionalContext) {
+      flattenedAdditionalContext = VectorEmbeddingUtils.flattenMetadata(metadata.additionalContext);
+    }
+    
+    // 合并基本元数据和扁平化的额外上下文
+    const finalMetadata = {
+      ...baseMetadata,
+      ...flattenedAdditionalContext
+    };
+    
     // 创建嵌入对象
     return {
       id: uuidv4(),
       text,
       vector,
       embedding: vector, // 保持与Chroma兼容
-      metadata: {
-        sourceId: metadata.sourceId || '',
-        sourceType: metadata.sourceType || 'text',
-        novelId: metadata.novelId || '',
-        title: metadata.title,
-        createdAt: metadata.createdAt || Date.now(),
-        updatedAt: metadata.updatedAt || Date.now(),
-        section: metadata.section,
-        additionalContext: metadata.additionalContext
-      }
+      metadata: finalMetadata
     };
   }
 

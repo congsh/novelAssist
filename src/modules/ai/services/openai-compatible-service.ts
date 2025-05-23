@@ -746,12 +746,26 @@ export class OpenAICompatibleService implements AIBaseService {
       // 检查是否为siliconflow API
       const isSpecialApi = activeProvider.baseUrl?.includes('siliconflow');
       
-      // 使用模型ID或默认嵌入模型
-      let model = modelId || 'text-embedding-ada-002';
+      // 检查是否配置了嵌入模型
+      let model = modelId;
+      if (!model) {
+        // 查找配置的嵌入模型
+        const embeddingModels = this.settings?.models?.filter(m => 
+          m.providerId === activeProvider.id && m.isEmbeddingModel
+        ) || [];
+        
+        if (embeddingModels.length === 0) {
+          throw new Error('未配置嵌入模型，请在AI设置中添加嵌入模型');
+        }
+        
+        // 使用第一个配置的嵌入模型
+        model = embeddingModels[0].name || embeddingModels[0].id;
+      }
       
       // 对于siliconflow API，使用直接fetch请求
       if (isSpecialApi) {
         console.log('检测到siliconflow API，使用直接fetch请求生成嵌入');
+        console.log('使用嵌入模型:', model);
         
         if (!activeProvider.baseUrl) {
           throw new Error('缺少API基础URL');
@@ -782,19 +796,26 @@ export class OpenAICompatibleService implements AIBaseService {
         
         console.log('使用直接fetch请求URL:', apiUrl);
         
+        const requestBody = {
+          model: model,
+          input: text,
+          encoding_format: 'float'
+        };
+        
+        console.log('请求体:', JSON.stringify(requestBody, null, 2));
+        
         const fetchResponse = await fetch(apiUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${activeProvider.apiKey || 'sk-no-key-required'}`,
           },
-          body: JSON.stringify({
-            model: model,
-            input: text,
-          }),
+          body: JSON.stringify(requestBody),
         });
         
         if (!fetchResponse.ok) {
+          const errorText = await fetchResponse.text();
+          console.error('SiliconFlow API 错误响应:', errorText);
           throw new Error(`HTTP错误: ${fetchResponse.status} ${fetchResponse.statusText}`);
         }
         
