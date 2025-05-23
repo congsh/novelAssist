@@ -78,7 +78,7 @@ export class OpenAIService implements AIBaseService {
       }
       
       // 获取当前活动的提供商
-      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
       if (!activeProvider) {
         throw new Error('未找到活动提供商');
       }
@@ -107,7 +107,7 @@ export class OpenAIService implements AIBaseService {
       }
       
       // 获取当前活动的提供商
-      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
       if (!activeProvider) {
         return [];
       }
@@ -297,7 +297,7 @@ export class OpenAIService implements AIBaseService {
       }
       
       // 获取当前活动的提供商
-      const activeProvider = this.settings.providers.find(p => p.id === this.settings.activeProviderId);
+      const activeProvider = this.settings.providers.find(p => p.id === this.settings?.activeProviderId);
       if (!activeProvider) {
         return false;
       }
@@ -326,6 +326,14 @@ export class OpenAIService implements AIBaseService {
         return false;
       }
     }
+  }
+
+  /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType(): AIProviderType {
+    return AIProviderType.OPENAI;
   }
 
   /**

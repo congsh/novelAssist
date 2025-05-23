@@ -11,6 +11,7 @@ import {
 import { aiServiceManager } from './ai-service-manager';
 import { AIRequestQueue } from './ai-request-queue';
 import { AIBaseService } from './ai-base-service';
+import { VectorEmbeddingUtils } from './vector-embedding-service-utils';
 
 /**
  * 向量嵌入服务
@@ -80,7 +81,7 @@ export class VectorEmbeddingService {
    */
   public async createEmbedding(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     // 检查缓存
-    const cacheKey = this.getCacheKey(request.text, request.modelId);
+    const cacheKey = VectorEmbeddingUtils.getCacheKey(request.text, request.modelId);
     const cachedEmbedding = this.embeddingCache.get(cacheKey);
     
     if (cachedEmbedding) {
@@ -209,101 +210,81 @@ export class VectorEmbeddingService {
       throw new Error('AI服务未配置，请先配置AI服务');
     }
     
-    // 查找可以生成嵌入的服务
-    const provider = this.findEmbeddingProvider(request.modelId);
+    // 查找支持嵌入的提供商和模型
+    const { providerId, service } = this.findEmbeddingProvider(request.modelId);
     
-    if (!provider) {
-      throw new Error(`找不到支持嵌入的服务提供商: ${request.modelId}`);
+    if (!service) {
+      throw new Error(`未找到支持嵌入的服务提供商(${request.modelId})`);
     }
     
-    // 如果没有指定模型ID，或者指定的模型ID不是嵌入模型，尝试使用合适的嵌入模型
-    let embeddingModelId = request.modelId;
-    
-    if (!embeddingModelId) {
-      // 查找该提供商下的嵌入模型
-      const embeddingModel = this.settings.models.find(m => 
-        m.providerId === provider.id && m.isEmbeddingModel
-      );
-      
-      if (embeddingModel) {
-        embeddingModelId = embeddingModel.id;
-      } else {
-        // 使用默认嵌入模型ID
-        embeddingModelId = 'text-embedding-ada-002';
+    // 根据提供商类型选择不同的处理方法
+    try {
+      switch (service.getProviderType()) {
+        case AIProviderType.OPENAI:
+          return await this.createOpenAIEmbedding(request, providerId);
+        case AIProviderType.DEEPSEEK:
+          return await this.createDeepSeekEmbedding(request, providerId);
+        case AIProviderType.OPENAI_COMPATIBLE:
+          return await this.createOpenAICompatibleEmbedding(request, providerId);
+        default:
+          // 对于不支持嵌入的服务，使用简单的本地嵌入
+          console.warn(`提供商 ${service.getProviderType()} 不支持嵌入，使用本地嵌入`);
+          return {
+            id: uuidv4(),
+            embedding: VectorEmbeddingUtils.createLocalEmbedding(request.text),
+            model: 'local-embedding-model'
+          };
       }
-    }
-    
-    // 创建新的请求，使用找到的嵌入模型ID
-    const embeddingRequest = {
-      ...request,
-      modelId: embeddingModelId
-    };
-    
-    // 根据提供商类型选择不同的嵌入方法
-    switch (provider.type) {
-      case AIProviderType.OPENAI:
-        return this.createOpenAIEmbedding(embeddingRequest, provider.id);
-        
-      case AIProviderType.DEEPSEEK:
-        return this.createDeepSeekEmbedding(embeddingRequest, provider.id);
-        
-      // 添加其他可能支持嵌入的服务类型
-      case AIProviderType.OPENAI_COMPATIBLE:
-        return this.createOpenAICompatibleEmbedding(embeddingRequest, provider.id);
-        
-      default:
-        throw new Error(`提供商 ${provider.type} 不支持嵌入生成`);
+    } catch (error) {
+      console.error('[VectorEmbeddingService] 处理嵌入请求失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 查找能够生成嵌入的提供商
-   * @param modelId 模型ID
+   * 查找支持嵌入的提供商和服务
+   * @param modelId 模型ID，优先查找指定的模型
+   * @returns 提供商ID和服务
    */
   private findEmbeddingProvider(modelId: string) {
     if (!this.settings) {
-      return null;
+      throw new Error('向量嵌入服务未初始化');
     }
     
-    // 首先尝试直接查找与模型ID匹配的提供商
-    const model = this.settings.models.find(m => m.id === modelId);
-    
-    if (model) {
-      return this.settings.providers.find(p => p.id === model.providerId);
-    }
-    
-    // 如果没有找到指定模型，尝试查找标记为嵌入模型的模型
+    // 查找嵌入模型
     const embeddingModels = this.settings.models.filter(m => m.isEmbeddingModel);
     
-    if (embeddingModels.length > 0) {
-      // 按提供商类型排序，优先选择OpenAI
-      const sortedModels = [...embeddingModels].sort((a, b) => {
-        const providerA = this.settings?.providers.find(p => p.id === a.providerId);
-        const providerB = this.settings?.providers.find(p => p.id === b.providerId);
-        
-        if (providerA?.type === AIProviderType.OPENAI && providerB?.type !== AIProviderType.OPENAI) {
-          return -1;
-        } else if (providerA?.type !== AIProviderType.OPENAI && providerB?.type === AIProviderType.OPENAI) {
-          return 1;
-        }
-        return 0;
-      });
-      
-      // 使用第一个可用的嵌入模型
-      const selectedModel = sortedModels[0];
-      return this.settings.providers.find(p => p.id === selectedModel.providerId);
+    // 如果未指定模型ID或未找到指定的模型，则查找第一个嵌入模型
+    let targetModelId = modelId;
+    if (!targetModelId || !this.settings.models.find(m => m.id === targetModelId)) {
+      const firstEmbeddingModel = embeddingModels[0];
+      if (firstEmbeddingModel) {
+        targetModelId = firstEmbeddingModel.id;
+      }
     }
     
-    // 如果没有找到嵌入模型，使用默认的兼容嵌入的提供商
-    return this.settings.providers.find(p => 
-      p.type === AIProviderType.OPENAI || 
-      p.type === AIProviderType.DEEPSEEK ||
-      p.type === AIProviderType.OPENAI_COMPATIBLE
-    );
+    // 尝试找到模型对应的提供商
+    let providerId = '';
+    if (targetModelId) {
+      const model = this.settings.models.find(m => m.id === targetModelId);
+      if (model) {
+        providerId = model.providerId;
+      }
+    }
+    
+    // 如果未找到对应的提供商，则使用当前活动的提供商
+    if (!providerId) {
+      providerId = this.settings.activeProviderId;
+    }
+    
+    // 获取提供商服务
+    const service = this.serviceManager.getService(providerId);
+    
+    return { providerId, service };
   }
   
   /**
-   * 创建OpenAI嵌入
+   * 使用OpenAI服务创建嵌入
    * @param request 嵌入请求
    * @param providerId 提供商ID
    */
@@ -315,30 +296,25 @@ export class VectorEmbeddingService {
       const service = this.serviceManager.getService(providerId);
       
       if (!service) {
-        throw new Error(`OpenAI服务未注册: ${providerId}`);
+        throw new Error(`未找到ID为 ${providerId} 的OpenAI服务`);
       }
       
-      // 这里假设OpenAI服务实现了嵌入API (需要在OpenAIService中添加此功能)
-      // 实际实现时，需要在OpenAIService中添加createEmbedding方法
-      const response = await (service as any).createEmbedding({
-        text: request.text,
-        modelId: request.modelId
-      });
+      // 调用OpenAI API创建嵌入
+      const embedding = await service.createEmbedding(request.text, request.modelId);
       
       return {
         id: uuidv4(),
-        embedding: response.embedding,
-        model: response.model,
-        usage: response.usage
+        embedding: embedding,
+        model: request.modelId || 'text-embedding-ada-002'
       };
     } catch (error) {
-      console.error('[VectorEmbeddingService] OpenAI嵌入生成失败:', error);
-      throw new Error(`OpenAI嵌入生成失败: ${(error as Error).message}`);
+      console.error('[VectorEmbeddingService] OpenAI嵌入创建失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 创建DeepSeek嵌入
+   * 使用DeepSeek服务创建嵌入
    * @param request 嵌入请求
    * @param providerId 提供商ID
    */
@@ -350,29 +326,25 @@ export class VectorEmbeddingService {
       const service = this.serviceManager.getService(providerId);
       
       if (!service) {
-        throw new Error(`DeepSeek服务未注册: ${providerId}`);
+        throw new Error(`未找到ID为 ${providerId} 的DeepSeek服务`);
       }
       
-      // 需要在DeepSeekService中添加createEmbedding方法
-      const response = await (service as any).createEmbedding({
-        text: request.text,
-        modelId: request.modelId
-      });
+      // 调用DeepSeek API创建嵌入
+      const embedding = await service.createEmbedding(request.text, request.modelId);
       
       return {
         id: uuidv4(),
-        embedding: response.embedding,
-        model: response.model,
-        usage: response.usage
+        embedding: embedding,
+        model: request.modelId || 'deepseek-embedding'
       };
     } catch (error) {
-      console.error('[VectorEmbeddingService] DeepSeek嵌入生成失败:', error);
-      throw new Error(`DeepSeek嵌入生成失败: ${(error as Error).message}`);
+      console.error('[VectorEmbeddingService] DeepSeek嵌入创建失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 创建OpenAI兼容嵌入
+   * 使用OpenAI兼容服务创建嵌入
    * @param request 嵌入请求
    * @param providerId 提供商ID
    */
@@ -384,131 +356,51 @@ export class VectorEmbeddingService {
       const service = this.serviceManager.getService(providerId);
       
       if (!service) {
-        throw new Error(`OpenAI兼容服务未注册: ${providerId}`);
+        throw new Error(`未找到ID为 ${providerId} 的OpenAI兼容服务`);
       }
       
-      // 需要在OpenAICompatibleService中添加createEmbedding方法
-      const response = await (service as any).createEmbedding({
-        text: request.text,
-        modelId: request.modelId
-      });
+      // 调用OpenAI兼容API创建嵌入
+      const embedding = await service.createEmbedding(request.text, request.modelId);
       
       return {
         id: uuidv4(),
-        embedding: response.embedding,
-        model: response.model,
-        usage: response.usage
+        embedding: embedding,
+        model: request.modelId || 'compatible-embedding-model'
       };
     } catch (error) {
-      console.error('[VectorEmbeddingService] OpenAI兼容嵌入生成失败:', error);
-      throw new Error(`OpenAI兼容嵌入生成失败: ${(error as Error).message}`);
+      console.error('[VectorEmbeddingService] OpenAI兼容嵌入创建失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 生成本地嵌入 (备用方案，使用简单的统计方法)
-   * @param text 文本
-   */
-  private createLocalEmbedding(text: string): number[] {
-    // 这是一个非常简单的本地嵌入方案，仅作为备用
-    // 实际应用中应使用专业的嵌入模型
-    const words = text.toLowerCase().split(/\s+/);
-    const embedding: number[] = new Array(128).fill(0);
-    
-    for (let i = 0; i < words.length; i++) {
-      const word = words[i];
-      for (let j = 0; j < word.length && j < 128; j++) {
-        const charCode = word.charCodeAt(j);
-        embedding[j] += charCode / 255;
-      }
-    }
-    
-    // 归一化
-    const magnitude = Math.sqrt(embedding.reduce((sum, val) => sum + val * val, 0));
-    return embedding.map(val => (magnitude === 0 ? 0 : val / magnitude));
-  }
-  
-  /**
-   * 创建向量嵌入数据对象
-   * @param text 文本
-   * @param vector 向量
-   * @param metadata 元数据
-   */
-  public createVectorEmbedding(
-    text: string, 
-    vector: number[], 
-    metadata: Partial<VectorEmbedding['metadata']>
-  ): VectorEmbedding {
-    return {
-      id: uuidv4(),
-      vector,
-      embedding: vector,
-      text,
-      metadata: {
-        sourceId: metadata.sourceId || uuidv4(),
-        sourceType: metadata.sourceType || 'text',
-        novelId: metadata.novelId || '',
-        createdAt: metadata.createdAt || Date.now(),
-        updatedAt: metadata.updatedAt || Date.now(),
-        title: metadata.title,
-        section: metadata.section,
-        additionalContext: metadata.additionalContext
-      }
-    };
-  }
-  
-  /**
-   * 获取缓存键
-   * @param text 文本
-   * @param modelId 模型ID
-   */
-  private getCacheKey(text: string, modelId: string): string {
-    // 使用文本哈希和模型ID作为缓存键
-    const textHash = this.simpleHash(text);
-    return `${this.cacheKeyPrefix}${modelId}_${textHash}`;
-  }
-  
-  /**
-   * 简单的字符串哈希函数
-   * @param str 字符串
-   */
-  private simpleHash(str: string): string {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // 转换为32位整数
-    }
-    return hash.toString(16);
-  }
-  
-  /**
-   * 添加嵌入到缓存
+   * 添加到缓存
    * @param key 缓存键
-   * @param embedding 嵌入
+   * @param embedding 嵌入响应
    */
   private addToCache(key: string, embedding: EmbeddingResponse): void {
-    // 如果缓存已满，移除最早的条目
+    // 如果缓存已满，删除最旧的条目
     if (this.embeddingCache.size >= this.maxCacheSize) {
-      const keys = Array.from(this.embeddingCache.keys());
-      if (keys.length > 0) {
-        // 安全地获取第一个键
-        this.embeddingCache.delete(keys[0]);
+      const oldestKey = this.embeddingCache.keys().next().value;
+      if (oldestKey) {
+        this.embeddingCache.delete(oldestKey);
       }
     }
     
+    // 添加到缓存
     this.embeddingCache.set(key, embedding);
   }
   
   /**
-   * 清除嵌入缓存
+   * 清空缓存
    */
   public clearCache(): void {
     this.embeddingCache.clear();
+    console.log('[VectorEmbeddingService] 缓存已清空');
   }
   
   /**
-   * 保存向量到向量存储
+   * 保存向量嵌入到向量存储
    * @param vectorEmbedding 向量嵌入
    * @param collectionName 集合名称
    */
@@ -522,24 +414,24 @@ export class VectorEmbeddingService {
     }
     
     try {
-      // 将向量保存到向量存储
+      // 调用主进程保存向量
       await window.electron.invoke('vector:create-embedding', {
         id: vectorEmbedding.id,
-        vector: vectorEmbedding.vector,
         text: vectorEmbedding.text,
         metadata: vectorEmbedding.metadata,
         collectionName
       });
       
+      console.log(`[VectorEmbeddingService] 向量已保存到集合: ${collectionName}`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 保存向量到向量存储失败:', error);
-      return false;
+      console.error('[VectorEmbeddingService] 保存向量失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 批量保存向量到向量存储
+   * 批量保存向量嵌入到向量存储
    * @param vectorEmbeddings 向量嵌入数组
    * @param collectionName 集合名称
    */
@@ -557,19 +449,24 @@ export class VectorEmbeddingService {
     }
     
     try {
-      // 批量保存向量到向量存储
+      // 准备批量保存的数据
+      const ids = vectorEmbeddings.map(v => v.id);
+      const texts = vectorEmbeddings.map(v => v.text);
+      const metadatas = vectorEmbeddings.map(v => v.metadata);
+      
+      // 调用主进程批量保存向量
       await window.electron.invoke('vector:create-embedding-batch', {
-        ids: vectorEmbeddings.map(ve => ve.id),
-        vectors: vectorEmbeddings.map(ve => ve.vector),
-        texts: vectorEmbeddings.map(ve => ve.text),
-        metadatas: vectorEmbeddings.map(ve => ve.metadata),
+        ids,
+        texts,
+        metadatas,
         collectionName
       });
       
+      console.log(`[VectorEmbeddingService] 已批量保存 ${vectorEmbeddings.length} 个向量到集合: ${collectionName}`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 批量保存向量到向量存储失败:', error);
-      return false;
+      console.error('[VectorEmbeddingService] 批量保存向量失败:', error);
+      throw error;
     }
   }
   
@@ -577,7 +474,7 @@ export class VectorEmbeddingService {
    * 查询相似向量
    * @param queryText 查询文本
    * @param filter 过滤条件
-   * @param limit 结果数量限制
+   * @param limit 限制结果数量
    * @param collectionName 集合名称
    */
   public async querySimilar(
@@ -592,7 +489,7 @@ export class VectorEmbeddingService {
     }
     
     try {
-      // 查询相似向量
+      // 调用主进程查询相似向量
       const results = await window.electron.invoke('vector:query-similar', {
         queryText,
         filter,
@@ -600,10 +497,11 @@ export class VectorEmbeddingService {
         collectionName
       });
       
+      console.log(`[VectorEmbeddingService] 查询到 ${results.length} 个相似向量`);
       return results;
     } catch (error) {
       console.error('[VectorEmbeddingService] 查询相似向量失败:', error);
-      return [];
+      throw error;
     }
   }
   
@@ -621,24 +519,28 @@ export class VectorEmbeddingService {
       return false;
     }
     
+    if (ids.length === 0) {
+      return true;
+    }
+    
     try {
-      // 从向量存储中删除向量
+      // 调用主进程删除向量
       await window.electron.invoke('vector:delete-by-ids', {
         ids,
         collectionName
       });
       
+      console.log(`[VectorEmbeddingService] 已删除 ${ids.length} 个向量`);
       return true;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 从向量存储中删除向量失败:', error);
-      return false;
+      console.error('[VectorEmbeddingService] 删除向量失败:', error);
+      throw error;
     }
   }
   
   /**
-   * 创建向量嵌入对象并保存到向量数据库
-   * 
-   * @param text 文本内容
+   * 创建和保存向量嵌入
+   * @param text 文本
    * @param modelId 模型ID
    * @param metadata 元数据
    * @param collectionName 集合名称
@@ -650,32 +552,31 @@ export class VectorEmbeddingService {
     collectionName: string = 'default'
   ): Promise<VectorEmbedding | null> {
     try {
-      // 生成文本的向量嵌入
+      // 创建嵌入
       const embeddingResponse = await this.createEmbedding({ text, modelId });
       
       // 创建向量嵌入对象
-      const vectorEmbedding = this.createVectorEmbedding(
+      const vectorEmbedding = VectorEmbeddingUtils.createVectorEmbedding(
         text,
         embeddingResponse.embedding,
         metadata
       );
       
-      // 保存到向量数据库
+      // 保存到向量存储
       if (this.vectorStoreEnabled) {
         await this.saveToVectorStore(vectorEmbedding, collectionName);
       }
       
       return vectorEmbedding;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 创建并保存向量嵌入失败:', error);
+      console.error('[VectorEmbeddingService] 创建和保存向量嵌入失败:', error);
       return null;
     }
   }
   
   /**
-   * 批量创建向量嵌入对象并保存到向量数据库
-   * 
-   * @param texts 文本内容数组
+   * 批量创建和保存向量嵌入
+   * @param texts 文本数组
    * @param modelId 模型ID
    * @param metadatas 元数据数组
    * @param collectionName 集合名称
@@ -687,27 +588,26 @@ export class VectorEmbeddingService {
     collectionName: string = 'default'
   ): Promise<VectorEmbedding[]> {
     try {
-      // 生成文本的向量嵌入
+      // 创建嵌入
       const embeddingResponses = await this.createEmbeddingBatch(texts, modelId);
       
       // 创建向量嵌入对象
       const vectorEmbeddings = embeddingResponses.map((response, index) => {
-        const metadata = metadatas.length > index ? metadatas[index] : {};
-        return this.createVectorEmbedding(
+        return VectorEmbeddingUtils.createVectorEmbedding(
           texts[index],
           response.embedding,
-          metadata
+          metadatas[index] || {}
         );
       });
       
-      // 保存到向量数据库
+      // 保存到向量存储
       if (this.vectorStoreEnabled && vectorEmbeddings.length > 0) {
         await this.saveToVectorStoreBatch(vectorEmbeddings, collectionName);
       }
       
       return vectorEmbeddings;
     } catch (error) {
-      console.error('[VectorEmbeddingService] 批量创建并保存向量嵌入失败:', error);
+      console.error('[VectorEmbeddingService] 批量创建和保存向量嵌入失败:', error);
       return [];
     }
   }

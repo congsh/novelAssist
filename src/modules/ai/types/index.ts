@@ -431,4 +431,237 @@ export interface ConsistencyCheckResponse {
   };
   status: 'success' | 'error' | 'partial'; // 检查状态
   message?: string;          // 状态消息
+}
+
+/**
+ * Agent类型枚举
+ */
+export enum AgentType {
+  EDITOR = 'editor',         // 编辑Agent
+  STYLE = 'style',           // 风格Agent
+  CHARACTER = 'character',   // 角色Agent
+  CONTINUATION = 'continuation', // 续写Agent
+  READER = 'reader',         // 读者Agent
+  CUSTOM = 'custom'          // 自定义Agent
+}
+
+/**
+ * Agent能力枚举
+ */
+export enum AgentCapability {
+  TEXT_ANALYSIS = 'text_analysis',   // 文本分析
+  TEXT_GENERATION = 'text_generation', // 文本生成
+  CONTEXT_SEARCH = 'context_search',   // 上下文搜索
+  CONSISTENCY_CHECK = 'consistency_check', // 一致性检查
+  CHARACTER_MANAGEMENT = 'character_management', // 角色管理
+  PLOT_DEVELOPMENT = 'plot_development', // 情节发展
+  STYLE_ANALYSIS = 'style_analysis',   // 风格分析
+  READER_FEEDBACK = 'reader_feedback'  // 读者反馈
+}
+
+/**
+ * Agent配置接口
+ */
+export interface AgentConfig {
+  id: string;                 // 配置ID
+  name: string;               // 显示名称
+  description: string;        // 描述
+  agentType: AgentType;       // Agent类型
+  capabilities: AgentCapability[]; // Agent能力
+  behaviorSettings: {         // 行为设置
+    temperature?: number;     // 温度
+    maxTokens?: number;       // 最大token数
+    responseStyle?: string;   // 响应风格
+    creativity?: number;      // 创造力(0-1)
+    detailLevel?: number;     // 细节级别(0-1)
+    focusAreas?: string[];    // 关注领域
+  };
+  promptTemplates: {          // 提示词模板
+    system?: string;          // 系统提示词
+    task?: string;            // 任务提示词
+    examples?: Array<{        // 示例
+      input: string;
+      output: string;
+    }>;
+  };
+  resourceSettings: {         // 资源设置
+    providerId: string;       // 提供商ID
+    modelId: string;          // 模型ID
+    priority?: number;        // 优先级
+    costLimit?: number;       // 成本限制
+  };
+  userFeedback?: {            // 用户反馈
+    rating?: number;          // 评分(1-5)
+    comments?: string;        // 评论
+    usageCount?: number;      // 使用次数
+  };
+  isActive: boolean;          // 是否激活
+  isSystem: boolean;          // 是否系统预设
+  metadata?: Record<string, any>; // 元数据
+}
+
+/**
+ * Agent会话接口
+ */
+export interface AgentSession {
+  id: string;                 // 会话ID
+  agentConfigId: string;      // Agent配置ID
+  novelId: string;            // 小说ID
+  title: string;              // 会话标题
+  status: 'active' | 'completed' | 'error'; // 会话状态
+  context: {                  // 上下文
+    task: string;             // 任务描述
+    inputs: Record<string, any>; // 输入数据
+    references: Array<{       // 参考资料
+      id: string;
+      type: string;
+      content: string;
+    }>;
+  };
+  history: Array<{            // 历史记录
+    timestamp: number;        // 时间戳
+    type: 'input' | 'output' | 'error' | 'info'; // 类型
+    content: any;             // 内容
+  }>;
+  results: {                  // 结果
+    outputs: Record<string, any>; // 输出数据
+    summary?: string;         // 摘要
+    recommendations?: string[]; // 建议
+  };
+  userFeedback?: {            // 用户反馈
+    rating?: number;          // 评分
+    comments?: string;        // 评论
+    appliedSuggestions?: boolean; // 是否应用建议
+  };
+  metrics?: {                 // 指标
+    startTime: number;        // 开始时间
+    endTime?: number;         // 结束时间
+    tokenUsage?: {            // token使用情况
+      prompt: number;         // 提示词token
+      completion: number;     // 完成token
+      total: number;          // 总token
+    };
+    cost?: number;            // 成本
+  };
+  metadata?: Record<string, any>; // 元数据
+}
+
+/**
+ * 工作流节点类型
+ */
+export enum WorkflowNodeType {
+  START = 'start',            // 开始节点
+  END = 'end',                // 结束节点
+  AGENT = 'agent',            // Agent节点
+  CONDITION = 'condition',    // 条件节点
+  TRANSFORM = 'transform',    // 转换节点
+  USER_INPUT = 'user_input',  // 用户输入节点
+  USER_REVIEW = 'user_review' // 用户审核节点
+}
+
+/**
+ * 工作流节点接口
+ */
+export interface WorkflowNode {
+  id: string;                 // 节点ID
+  type: WorkflowNodeType;     // 节点类型
+  label: string;              // 显示标签
+  data: {                     // 节点数据
+    agentConfigId?: string;   // Agent配置ID
+    condition?: string;       // 条件表达式
+    transformFn?: string;     // 转换函数
+    userPrompt?: string;      // 用户提示
+    timeout?: number;         // 超时时间(ms)
+  };
+  position: {                 // 位置
+    x: number;
+    y: number;
+  };
+}
+
+/**
+ * 工作流连接接口
+ */
+export interface WorkflowEdge {
+  id: string;                 // 连接ID
+  source: string;             // 源节点ID
+  target: string;             // 目标节点ID
+  label?: string;             // 显示标签
+  condition?: string;         // 条件表达式
+}
+
+/**
+ * 工作流模板接口
+ */
+export interface WorkflowTemplate {
+  id: string;                 // 模板ID
+  name: string;               // 显示名称
+  description: string;        // 描述
+  workflowDefinition: {       // 工作流定义
+    nodes: WorkflowNode[];    // 节点
+    edges: WorkflowEdge[];    // 连接
+  };
+  category: string;           // 分类
+  tags: string[];             // 标签
+  usageCount: number;         // 使用次数
+  rating: number;             // 评分
+  isSystem: boolean;          // 是否系统预设
+  metadata?: Record<string, any>; // 元数据
+}
+
+/**
+ * 工作流实例接口
+ */
+export interface WorkflowInstance {
+  id: string;                 // 实例ID
+  templateId: string;         // 模板ID
+  novelId: string;            // 小说ID
+  name: string;               // 实例名称
+  status: 'pending' | 'running' | 'completed' | 'error' | 'paused'; // 状态
+  workflowData: {             // 工作流数据
+    nodes: WorkflowNode[];    // 节点
+    edges: WorkflowEdge[];    // 连接
+    variables: Record<string, any>; // 变量
+  };
+  currentNode?: string;       // 当前节点ID
+  executionHistory: Array<{   // 执行历史
+    timestamp: number;        // 时间戳
+    nodeId: string;           // 节点ID
+    status: 'started' | 'completed' | 'error'; // 状态
+    inputs?: Record<string, any>; // 输入
+    outputs?: Record<string, any>; // 输出
+    error?: string;           // 错误信息
+  }>;
+  results?: Record<string, any>; // 结果
+  userFeedback?: {            // 用户反馈
+    rating?: number;          // 评分
+    comments?: string;        // 评论
+  };
+  errorMessage?: string;      // 错误信息
+  metadata?: Record<string, any>; // 元数据
+}
+
+/**
+ * 上下文模板接口
+ */
+export interface ContextTemplate {
+  id: string;                 // 模板ID
+  name: string;               // 显示名称
+  description: string;        // 描述
+  templateStructure: {        // 模板结构
+    sections: Array<{         // 章节
+      id: string;             // 章节ID
+      name: string;           // 章节名称
+      type: 'character' | 'location' | 'plot' | 'style' | 'custom'; // 类型
+      content?: string;       // 内容模板
+      maxTokens?: number;     // 最大token数
+      priority?: number;      // 优先级
+      required?: boolean;     // 是否必需
+    }>;
+    maxTotalTokens?: number;  // 最大总token数
+  };
+  category: string;           // 分类
+  defaultPriority: number;    // 默认优先级
+  isSystem: boolean;          // 是否系统预设
+  metadata?: Record<string, any>; // 元数据
 } 

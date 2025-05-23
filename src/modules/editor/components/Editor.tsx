@@ -26,6 +26,10 @@ import EditorSidebar from './EditorSidebar';
 import VersionService from '../services/VersionService';
 import ThemeService from '../services/ThemeService';
 import EditorAIPanel from '../../ai/components/EditorAIPanel';
+import EditorHeader from './EditorHeader';
+import EditorFooter from './EditorFooter';
+import { EditorUtils } from '../utils/EditorUtils';
+import { AutoSaveService } from '../services/AutoSaveService';
 
 const { Header, Content, Sider } = Layout;
 const { Title } = Typography;
@@ -73,12 +77,8 @@ const Editor: React.FC = () => {
   const [activeTabKey, setActiveTabKey] = useState<string>('info');
   const [sidebarVisible, setSidebarVisible] = useState<boolean>(true);
   
-  // 内容变更标记
-  const contentChanged = useRef<boolean>(false);
-  // 自动保存计时器
-  const autoSaveTimerRef = useRef<NodeJS.Timeout | null>(null);
-  // 上次自动保存的内容
-  const lastAutoSavedContent = useRef<string>('');
+  // 自动保存服务
+  const autoSaveServiceRef = useRef<AutoSaveService | null>(null);
 
   // 加载章节数据
   const loadChapterData = useCallback(async () => {
@@ -95,14 +95,15 @@ const Editor: React.FC = () => {
         
         // 将HTML内容转换为EditorState
         if (chapterData.content) {
-          const contentBlock = htmlToDraft(chapterData.content);
-          if (contentBlock) {
-            const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
-            setEditorState(EditorState.createWithContent(contentState));
-            
-            // 记录初始内容，用于自动保存比较
-            lastAutoSavedContent.current = chapterData.content;
-          }
+          const editorState = EditorUtils.htmlToEditorState(chapterData.content);
+          setEditorState(editorState);
+          
+          // 初始化自动保存服务
+          autoSaveServiceRef.current = new AutoSaveService(
+            chapterData.content,
+            saveChapter,
+            autoSaveEnabled
+          );
         }
         
         // 获取小说详情
@@ -121,16 +122,16 @@ const Editor: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [novelId, chapterId, navigate, message]);
+  }, [novelId, chapterId, navigate, message, autoSaveEnabled]);
 
   // 初始加载
   useEffect(() => {
     loadChapterData();
     
-    // 组件卸载时清除自动保存计时器
+    // 组件卸载时清理资源
     return () => {
-      if (autoSaveTimerRef.current) {
-        clearInterval(autoSaveTimerRef.current);
+      if (autoSaveServiceRef.current) {
+        autoSaveServiceRef.current.dispose();
       }
     };
   }, [loadChapterData]);
@@ -146,585 +147,255 @@ const Editor: React.FC = () => {
     return () => clearInterval(timer);
   }, [loading, saving]);
 
-  // 自动保存功能
+  // 自动保存设置变更处理
   useEffect(() => {
-    // 如果启用了自动保存且内容已更改
-    if (autoSaveEnabled && contentChanged.current) {
-      // 清除之前的计时器
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-      
-      // 设置新的自动保存计时器（5分钟）
-      autoSaveTimerRef.current = setTimeout(async () => {
-        if (contentChanged.current && !saving) {
-          await handleAutoSave();
-        }
-      }, 5 * 60 * 1000); // 5分钟
+    if (autoSaveServiceRef.current) {
+      autoSaveServiceRef.current.setAutoSaveEnabled(autoSaveEnabled);
     }
-    
-    return () => {
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
-    };
-  }, [editorState, autoSaveEnabled]);
+  }, [autoSaveEnabled]);
 
   // 编辑器内容变化处理
   const handleEditorChange = (state: EditorState) => {
     setEditorState(state);
     
     // 计算字数
-    const contentText = state.getCurrentContent().getPlainText();
-    setWordCount(contentText.length);
+    setWordCount(EditorUtils.calculateWordCount(state));
     
-    // 标记内容已更改
-    contentChanged.current = true;
-  };
-
-  // 自动保存处理
-  const handleAutoSave = async () => {
-    if (!novelId || !chapterId || !contentChanged.current) return;
-    
-    try {
-      // 将编辑器内容转换为HTML
-      const contentHtml = draftToHtml(convertToRaw(editorState.getCurrentContent()));
-      
-      // 如果内容没有变化，不执行自动保存
-      if (contentHtml === lastAutoSavedContent.current) {
-        return;
-      }
-      
-      setSaving(true);
-      
-      // 更新章节
-      const response = await window.electron.invoke('update-chapter', {
-        id: chapterId,
-        title,
-        content: contentHtml
-      });
-      
-      if (response.success) {
-        // 保存版本历史
-        await VersionService.saveVersion(chapterId, contentHtml, '自动保存');
-        
-        // 更新最后保存时间和内容
-        setLastSavedAt(new Date());
-        lastAutoSavedContent.current = contentHtml;
-        setChapter(response.data);
-        contentChanged.current = false;
-        
-        console.log('自动保存成功:', new Date().toLocaleString());
-      } else {
-        console.error('自动保存失败:', response.error);
-      }
-    } catch (error) {
-      console.error('自动保存失败:', error);
-    } finally {
-      setSaving(false);
+    // 标记内容已更改并设置自动保存定时器
+    if (autoSaveServiceRef.current) {
+      autoSaveServiceRef.current.handleEditorChange(state, title);
     }
   };
 
-  // 保存章节内容
-  const saveChapter = async () => {
-    if (!novelId || !chapterId) return;
+  // 保存章节
+  const saveChapter = async (content?: string, chapterTitle?: string): Promise<boolean> => {
+    if (!novelId || !chapterId) return false;
     
-    setSaving(true);
     try {
-      // 将编辑器内容转换为HTML
-      const contentHtml = draftToHtml(convertToRaw(editorState.getCurrentContent()));
+      setSaving(true);
+      
+      // 如果未提供内容，则使用当前编辑器内容
+      const contentToSave = content || EditorUtils.editorStateToHtml(editorState);
+      const titleToSave = chapterTitle || title;
+      
+      // 保存版本历史
+      if (chapter && chapter.content) {
+        await VersionService.saveVersion(chapterId, 'chapter', chapter.content);
+      }
       
       // 更新章节
       const response = await window.electron.invoke('update-chapter', {
         id: chapterId,
-        title,
-        content: contentHtml
+        title: titleToSave,
+        content: contentToSave,
+        word_count: EditorUtils.calculateWordCount(editorState)
       });
       
       if (response.success) {
-        message.success('保存成功');
         setLastSavedAt(new Date());
-        setChapter(response.data);
+        setChapter(prev => prev ? { ...prev, content: contentToSave, title: titleToSave } : null);
         
-        // 保存版本历史
-        await VersionService.saveVersion(chapterId, contentHtml, '手动保存');
+        // 更新自动保存服务的上次保存内容
+        if (autoSaveServiceRef.current) {
+          autoSaveServiceRef.current.updateLastSavedContent(contentToSave);
+        }
         
-        // 更新最后自动保存的内容
-        lastAutoSavedContent.current = contentHtml;
-        contentChanged.current = false;
+        return true;
       } else {
         message.error(response.error || '保存失败');
+        return false;
       }
     } catch (error) {
       console.error('保存章节失败:', error);
-      message.error('保存失败');
+      message.error('保存章节失败');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
-  // 切换全屏模式
+  // 手动保存处理
+  const handleSave = async () => {
+    await saveChapter();
+  };
+
+  // 返回按钮处理
+  const handleBack = () => {
+    navigate(`/novels/${novelId}`);
+  };
+
+  // 切换全屏
   const toggleFullscreen = () => {
     setIsFullscreen(!isFullscreen);
   };
 
-  // 处理主题变更
+  // 切换主题
   const handleThemeChange = (themeName: string) => {
+    ThemeService.setTheme(themeName);
     setCurrentTheme(themeName);
   };
 
-  // 处理版本恢复
+  // 恢复版本
   const handleRestoreVersion = (content: string) => {
-    // 将HTML内容转换为EditorState
-    const contentBlock = htmlToDraft(content);
-    if (contentBlock) {
-      const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
-      setEditorState(EditorState.createWithContent(contentState));
-      
-      // 标记内容已更改
-      contentChanged.current = true;
-    }
-  };
-
-  // 格式化时间
-  const formatTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
+    // 将版本内容转换为EditorState
+    const restoredEditorState = EditorUtils.htmlToEditorState(content);
+    setEditorState(restoredEditorState);
     
-    if (hours > 0) {
-      return `${hours}小时${mins}分钟`;
+    // 标记内容已更改
+    if (autoSaveServiceRef.current) {
+      autoSaveServiceRef.current.setContentChanged(true);
     }
-    return `${mins}分钟`;
+    
+    message.success('已恢复到选定的版本');
+    setDrawerVisible(false);
   };
 
-  // 获取主题样式
-  const themeStyles = ThemeService.generateThemeStyles();
-
-  // 切换侧边栏显示状态
+  // 切换侧边栏
   const toggleSidebar = () => {
     setSidebarVisible(!sidebarVisible);
   };
 
-  // 返回加载中状态
+  // 切换AI面板
+  const toggleAIPanel = () => {
+    setAiDrawerVisible(!aiDrawerVisible);
+  };
+
+  // 切换主题选择器
+  const toggleThemeSelector = () => {
+    setDrawerVisible(!drawerVisible);
+    setActiveTabKey('theme');
+  };
+
+  // 切换版本历史
+  const toggleVersionHistory = () => {
+    setDrawerVisible(!drawerVisible);
+    setActiveTabKey('version');
+  };
+
+  // 获取选中文本函数，用于AI面板
+  const getSelectedText = (): string | undefined => {
+    return EditorUtils.getSelectedText(editorState);
+  };
+
+  // 渲染加载状态
   if (loading) {
     return (
-      <div style={{ textAlign: 'center', padding: '50px' }}>
-        <Spin size="large" />
-        <p>加载中...</p>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Spin size="large" tip="加载章节内容..." />
       </div>
     );
   }
 
   return (
-    <App>
-      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
-        <Header style={{ 
-          padding: '0 16px', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'space-between',
-          background: ThemeService.getThemeColors(currentTheme).headerBg
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center' }}>
-            <Button 
-              type="text" 
-              icon={<ArrowLeftOutlined />} 
-              onClick={() => navigate(`/novels/${novelId}`)}
-              style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
+    <Layout className={`editor-layout ${isFullscreen ? 'fullscreen' : ''}`} style={{ height: '100vh' }}>
+      {/* 顶部工具栏 */}
+      <EditorHeader
+        title={title}
+        setTitle={setTitle}
+        saving={saving}
+        isFullscreen={isFullscreen}
+        sidebarVisible={sidebarVisible}
+        onSave={handleSave}
+        onBack={handleBack}
+        onToggleFullscreen={toggleFullscreen}
+        onToggleAIPanel={toggleAIPanel}
+        onToggleTheme={toggleThemeSelector}
+        onToggleSidebar={toggleSidebar}
+        lastSavedAt={lastSavedAt}
+      />
+      
+      <Layout>
+        {/* 侧边栏 */}
+        {sidebarVisible && (
+          <Sider width={280} theme="light" style={{ overflowY: 'auto' }}>
+            <EditorSidebar 
+              novelId={novelId || ''} 
+              onVersionHistoryClick={toggleVersionHistory}
             />
-            <Input 
-              value={title} 
-              onChange={e => {
-                setTitle(e.target.value);
-                contentChanged.current = true;
-              }}
-              placeholder="章节标题"
-              bordered={false}
-              style={{ 
-                width: 300, 
-                marginLeft: 16,
-                color: ThemeService.getThemeColors(currentTheme).headerText,
-                background: 'transparent'
-              }}
-            />
-          </div>
-          <Space>
-            {lastSavedAt && (
-              <span style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}>
-                最后保存: {lastSavedAt.toLocaleTimeString()}
-              </span>
-            )}
-            <Tooltip title="显示/隐藏参考资料">
-              <Button 
-                type="text" 
-                icon={sidebarVisible ? <MenuFoldOutlined /> : <MenuUnfoldOutlined />} 
-                onClick={toggleSidebar}
-                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
-              />
-            </Tooltip>
-            <Tooltip title="主题设置">
-              <Button 
-                type="text" 
-                icon={<BgColorsOutlined />} 
-                onClick={() => setDrawerVisible(true)}
-                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
-              />
-            </Tooltip>
-            <Tooltip title="版本历史">
-              <Button 
-                type="text" 
-                icon={<HistoryOutlined />} 
-                onClick={() => setActiveTabKey('history')}
-                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
-              />
-            </Tooltip>
-            <Tooltip title="AI助手">
-              <Button 
-                type="text" 
-                icon={<RobotOutlined />} 
-                onClick={() => setAiDrawerVisible(true)}
-                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
-              />
-            </Tooltip>
-            <Tooltip title={isFullscreen ? "退出全屏" : "全屏编辑"}>
-              <Button 
-                type="text" 
-                icon={isFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />} 
-                onClick={toggleFullscreen}
-                style={{ color: ThemeService.getThemeColors(currentTheme).headerText }}
-              />
-            </Tooltip>
-            <Button 
-              type="primary" 
-              icon={<SaveOutlined />} 
-              loading={saving} 
-              onClick={saveChapter}
-            >
-              保存
-            </Button>
-          </Space>
-        </Header>
-        <Layout>
-          {sidebarVisible && (
-            <Sider 
-              width={300} 
-              theme={ThemeService.getThemeColors(currentTheme).siderTheme}
-              style={{ 
-                background: ThemeService.getThemeColors(currentTheme).siderBg,
-                borderRight: `1px solid ${ThemeService.getThemeColors(currentTheme).borderColor}`,
-                overflow: 'auto'
-              }}
-            >
-              <div style={{ padding: '16px 0' }}>
-                <div style={{ 
-                  padding: '0 16px', 
-                  marginBottom: 16,
-                  color: ThemeService.getThemeColors(currentTheme).siderText
-                }}>
-                  <Title level={5} style={{ color: ThemeService.getThemeColors(currentTheme).siderText }}>
-                    <BookOutlined /> {novel?.title}
-                  </Title>
-                  <div>章节: {chapter?.title}</div>
-                </div>
-                <Divider style={{ margin: '8px 0' }} />
-                <EditorSidebar novelId={novelId || ''} />
-              </div>
-            </Sider>
-          )}
-          <Content style={{ 
-            padding: 24, 
-            background: ThemeService.getThemeColors(currentTheme).contentBg,
-            overflow: 'auto'
-          }}>
-            {loading ? (
-              <div style={{ textAlign: 'center', padding: '100px 0' }}>
-                <Spin size="large" />
-                <div style={{ marginTop: 16, color: ThemeService.getThemeColors(currentTheme).contentText }}>
-                  加载中...
-                </div>
-              </div>
-            ) : (
-              <div 
-                className={`editor-container ${isFullscreen ? 'fullscreen' : ''}`}
-                style={{ 
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                <div style={{ flex: 1, overflow: 'auto' }}>
-                  <DraftEditor
-                    editorState={editorState}
-                    onEditorStateChange={handleEditorChange}
-                    wrapperClassName={`editor-wrapper theme-${currentTheme}`}
-                    editorClassName={`editor-content theme-${currentTheme}`}
-                    toolbar={{
-                      options: ['inline', 'blockType', 'fontSize', 'list', 'textAlign', 'colorPicker', 'link', 'history'],
-                      inline: { inDropdown: false },
-                      list: { inDropdown: true },
-                      textAlign: { inDropdown: true },
-                      link: { inDropdown: true },
-                      history: { inDropdown: false },
-                    }}
-                  />
-                </div>
-                <div style={{ 
-                  marginTop: 16, 
-                  display: 'flex', 
-                  justifyContent: 'space-between',
-                  color: ThemeService.getThemeColors(currentTheme).contentText
-                }}>
-                  <div>
-                    <Space>
-                      <Statistic title="字数" value={wordCount} />
-                      <Statistic title="写作时间" value={formatTime(writingTime)} />
-                    </Space>
-                  </div>
-                  <div>
-                    <Space>
-                      <span>自动保存</span>
-                      <Switch checked={autoSaveEnabled} onChange={setAutoSaveEnabled} />
-                    </Space>
-                  </div>
-                </div>
-              </div>
-            )}
-          </Content>
-        </Layout>
-
-        {/* 主题设置抽屉 */}
-        <Drawer
-          title="设置"
-          placement="right"
-          onClose={() => setDrawerVisible(false)}
-          open={drawerVisible}
-          width={400}
-        >
-          <Tabs activeKey={activeTabKey} onChange={setActiveTabKey} items={[
-            {
-              key: "theme",
-              label: "主题",
-              children: (
-                <ThemeSelector 
-                  currentTheme={currentTheme} 
-                  onThemeChange={handleThemeChange} 
-                />
-              )
-            },
-            {
-              key: "history",
-              label: "历史版本",
-              children: (
-                chapterId && (
-                  <VersionHistory 
-                    chapterId={chapterId} 
-                    onRestore={handleRestoreVersion} 
-                  />
-                )
-              )
-            }
-          ]} />
-        </Drawer>
-
-        {/* AI助手抽屉 */}
-        <Drawer
-          title="AI写作助手"
-          placement="right"
-          onClose={() => setAiDrawerVisible(false)}
-          open={aiDrawerVisible}
-          width={400}
-        >
-          <div style={{ padding: 16 }}>
-            {chapter ? (
-              <EditorAIPanel
-                chapterId={chapterId || ''}
-                novelId={novelId || ''}
-                content={draftToHtml(convertToRaw(editorState.getCurrentContent()))}
-                selection={getSelectedText(editorState)}
-                cursorPosition={editorState.getSelection().getStartOffset()}
-                title={title}
-                onApplyChanges={(newContent) => {
-                  // 将新内容转换为EditorState
-                  const contentBlock = htmlToDraft(newContent);
-                  if (contentBlock) {
-                    const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
-                    setEditorState(EditorState.createWithContent(contentState));
-                    
-                    // 标记内容已更改
-                    contentChanged.current = true;
-                    
-                    notification.success({
-                      message: 'AI修改已应用',
-                      description: '内容已更新，请记得保存'
-                    });
-                  }
-                }}
-                onCreateCharacter={(characterData) => {
-                  // 创建角色
-                  window.electron.invoke('create-character', {
-                    novel_id: novelId,
-                    name: characterData.name,
-                    gender: characterData.gender,
-                    age: characterData.age,
-                    appearance: characterData.appearance,
-                    personality: characterData.personality,
-                    background: characterData.background
-                  }).then(response => {
-                    if (response.success) {
-                      notification.success({
-                        message: '角色创建成功',
-                        description: `角色 ${characterData.name} 已添加到小说中`
-                      });
-                    } else {
-                      notification.error({
-                        message: '角色创建失败',
-                        description: response.error || '未知错误'
-                      });
-                    }
-                  });
-                }}
-                onCreateLocation={(locationData) => {
-                  // 创建地点
-                  window.electron.invoke('create-location', {
-                    novel_id: novelId,
-                    name: locationData.name,
-                    description: locationData.description,
-                    features: locationData.features,
-                    importance: locationData.importance
-                  }).then(response => {
-                    if (response.success) {
-                      notification.success({
-                        message: '地点创建成功',
-                        description: `地点 ${locationData.name} 已添加到小说中`
-                      });
-                    } else {
-                      notification.error({
-                        message: '地点创建失败',
-                        description: response.error || '未知错误'
-                      });
-                    }
-                  });
-                }}
-                onUpdateOutline={(outlineData) => {
-                  // 更新大纲
-                  window.electron.invoke('update-chapter-outline', {
-                    chapter_id: chapterId,
-                    title: outlineData.title || title,
-                    summary: outlineData.summary,
-                    key_points: JSON.stringify(outlineData.keyPoints),
-                    characters: JSON.stringify(outlineData.characters),
-                    locations: JSON.stringify(outlineData.locations)
-                  }).then(response => {
-                    if (response.success) {
-                      notification.success({
-                        message: '大纲更新成功',
-                        description: '章节大纲已更新'
-                      });
-                    } else {
-                      notification.error({
-                        message: '大纲更新失败',
-                        description: response.error || '未知错误'
-                      });
-                    }
-                  });
-                }}
-                onAddTimeline={(timelineData) => {
-                  // 添加时间线事件
-                  window.electron.invoke('create-timeline-event', {
-                    novel_id: novelId,
-                    title: timelineData.title,
-                    time: timelineData.time,
-                    description: timelineData.description,
-                    characters: JSON.stringify(timelineData.characters),
-                    location: timelineData.location,
-                    chapter_id: chapterId
-                  }).then(response => {
-                    if (response.success) {
-                      notification.success({
-                        message: '时间线事件添加成功',
-                        description: `事件 ${timelineData.title} 已添加到时间线`
-                      });
-                    } else {
-                      notification.error({
-                        message: '时间线事件添加失败',
-                        description: response.error || '未知错误'
-                      });
-                    }
-                  });
-                }}
-              />
-            ) : (
-              <p>AI写作助手功能即将推出，敬请期待！</p>
-            )}
-          </div>
-        </Drawer>
+          </Sider>
+        )}
+        
+        {/* 编辑器主区域 */}
+        <Content style={{ overflow: 'auto', padding: '0 20px', backgroundColor: '#fff' }}>
+          <DraftEditor
+            editorState={editorState}
+            onEditorStateChange={handleEditorChange}
+            wrapperClassName="editor-wrapper"
+            editorClassName="editor-content"
+            toolbarClassName="editor-toolbar"
+            toolbar={{
+              options: ['inline', 'blockType', 'fontSize', 'fontFamily', 'list', 'textAlign', 'colorPicker', 'link', 'emoji', 'image', 'history'],
+              inline: { inDropdown: false },
+              list: { inDropdown: true },
+              textAlign: { inDropdown: true },
+              link: { inDropdown: true },
+              history: { inDropdown: true },
+            }}
+          />
+        </Content>
       </Layout>
-    </App>
+      
+      {/* 底部状态栏 */}
+      <EditorFooter
+        wordCount={wordCount}
+        writingTime={writingTime}
+        autoSaveEnabled={autoSaveEnabled}
+        formatTime={EditorUtils.formatTime}
+      />
+      
+      {/* 抽屉面板 - 版本历史和主题设置 */}
+      <Drawer
+        title="编辑器设置"
+        placement="right"
+        width={400}
+        onClose={() => setDrawerVisible(false)}
+        open={drawerVisible}
+      >
+        <Tabs activeKey={activeTabKey} onChange={setActiveTabKey}>
+          <Tabs.TabPane tab="版本历史" key="version">
+            <VersionHistory 
+              chapterId={chapterId || ''}
+              onRestore={handleRestoreVersion}
+            />
+          </Tabs.TabPane>
+          <Tabs.TabPane tab="主题设置" key="theme">
+            <ThemeSelector 
+              currentTheme={currentTheme}
+              onThemeChange={handleThemeChange}
+            />
+          </Tabs.TabPane>
+        </Tabs>
+      </Drawer>
+      
+      {/* AI助手抽屉 */}
+      <Drawer
+        title="AI写作助手"
+        placement="right"
+        width={400}
+        onClose={() => setAiDrawerVisible(false)}
+        open={aiDrawerVisible}
+      >
+        <EditorAIPanel
+          chapterId={chapterId || ''}
+          novelId={novelId || ''}
+          content={EditorUtils.editorStateToHtml(editorState)}
+          selection={getSelectedText()}
+          cursorPosition={editorState.getSelection().getStartOffset()}
+          title={title}
+          onApplyChanges={(newContent: string) => {
+            // 创建新的EditorState，插入AI生成的文本
+            const newEditorState = EditorUtils.htmlToEditorState(newContent);
+            setEditorState(newEditorState);
+            
+            // 标记内容已更改
+            if (autoSaveServiceRef.current) {
+              autoSaveServiceRef.current.setContentChanged(true);
+            }
+          }}
+        />
+      </Drawer>
+    </Layout>
   );
-};
-
-/**
- * 获取编辑器中选中的文本
- * @param editorState 编辑器状态
- * @returns 选中的文本，如果没有选中则返回undefined
- */
-const getSelectedText = (editorState: EditorState): string | undefined => {
-  const selectionState = editorState.getSelection();
-  
-  // 如果没有选中内容，返回undefined
-  if (selectionState.isCollapsed()) {
-    return undefined;
-  }
-  
-  const contentState = editorState.getCurrentContent();
-  const startKey = selectionState.getStartKey();
-  const endKey = selectionState.getEndKey();
-  const startOffset = selectionState.getStartOffset();
-  const endOffset = selectionState.getEndOffset();
-  
-  // 如果选择在同一个块内
-  if (startKey === endKey) {
-    const block = contentState.getBlockForKey(startKey);
-    return block.getText().slice(startOffset, endOffset);
-  }
-  
-  // 如果跨越多个块
-  let selectedText = '';
-  
-  // 获取所有块
-  let blockKey: string = startKey;
-  let isFirstBlock = true;
-  
-  // 遍历块直到结束块
-  while (blockKey) {
-    const block = contentState.getBlockForKey(blockKey);
-    
-    // 如果是第一个块，从选择开始位置截取
-    if (isFirstBlock) {
-      selectedText += block.getText().slice(startOffset);
-      isFirstBlock = false;
-    } 
-    // 如果是最后一个块，截取到选择结束位置
-    else if (blockKey === endKey) {
-      selectedText += '\n' + block.getText().slice(0, endOffset);
-    } 
-    // 中间的块，全部添加
-    else {
-      selectedText += '\n' + block.getText();
-    }
-    
-    // 如果已经处理到最后一个块，跳出循环
-    if (blockKey === endKey) {
-      break;
-    }
-    
-    // 获取下一个块的key
-    const nextBlock = contentState.getBlockAfter(blockKey);
-    if (!nextBlock) break;
-    blockKey = nextBlock.getKey();
-  }
-  
-  return selectedText;
 };
 
 export default Editor; 

@@ -5,7 +5,8 @@ import {
   ChatCompletionResponse,
   ChatMessage,
   EmbeddingRequest,
-  EmbeddingResponse
+  EmbeddingResponse,
+  AIProviderType
 } from '../types';
 
 /**
@@ -54,4 +55,10 @@ export interface AIBaseService {
    * 测试API连接
    */
   testConnection(): Promise<boolean>;
+  
+  /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType?(): AIProviderType;
 } 

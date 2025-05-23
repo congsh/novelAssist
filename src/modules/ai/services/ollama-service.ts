@@ -354,6 +354,14 @@ export class OllamaService implements AIBaseService {
   }
   
   /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType(): AIProviderType {
+    return AIProviderType.OLLAMA;
+  }
+  
+  /**
    * 测试API连接
    */
   async testConnection(): Promise<boolean> {

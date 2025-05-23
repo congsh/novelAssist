@@ -1,5 +1,7 @@
 import { EditorState, ContentState, convertToRaw, convertFromRaw } from 'draft-js';
 import debounce from 'lodash/debounce';
+import draftToHtml from 'draftjs-to-html';
+import htmlToDraft from 'html-to-draftjs';
 
 /**
  * 编辑器工具类
@@ -194,6 +196,136 @@ export class EditorUtils {
       words,
       paragraphs
     };
+  }
+
+  /**
+   * 格式化时间（分钟）为可读格式
+   * @param minutes 分钟数
+   * @returns 格式化后的时间字符串 (例如: 1小时30分钟)
+   */
+  static formatTime(minutes: number): string {
+    if (minutes < 60) {
+      return `${minutes}分钟`;
+    }
+    
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+    
+    if (remainingMinutes === 0) {
+      return `${hours}小时`;
+    }
+    
+    return `${hours}小时${remainingMinutes}分钟`;
+  }
+
+  /**
+   * 将HTML内容转换为EditorState
+   * @param htmlContent HTML格式的内容
+   * @returns EditorState对象
+   */
+  static htmlToEditorState(htmlContent: string): EditorState {
+    if (!htmlContent) {
+      return EditorState.createEmpty();
+    }
+    
+    const contentBlock = htmlToDraft(htmlContent);
+    if (!contentBlock) {
+      return EditorState.createEmpty();
+    }
+    
+    const contentState = ContentState.createFromBlockArray(contentBlock.contentBlocks);
+    return EditorState.createWithContent(contentState);
+  }
+
+  /**
+   * 将EditorState转换为HTML
+   * @param editorState EditorState对象
+   * @returns HTML格式的内容
+   */
+  static editorStateToHtml(editorState: EditorState): string {
+    if (!editorState) {
+      return '';
+    }
+    
+    return draftToHtml(convertToRaw(editorState.getCurrentContent()));
+  }
+
+  /**
+   * 计算文本的字数
+   * @param editorState EditorState对象
+   * @returns 字数
+   */
+  static calculateWordCount(editorState: EditorState): number {
+    if (!editorState) {
+      return 0;
+    }
+    
+    const contentText = editorState.getCurrentContent().getPlainText();
+    return contentText.length;
+  }
+
+  /**
+   * 获取选中的文本
+   * @param editorState EditorState对象
+   * @returns 选中的文本，如果没有选中则返回undefined
+   */
+  static getSelectedText(editorState: EditorState): string | undefined {
+    if (!editorState) {
+      return undefined;
+    }
+    
+    // 获取当前选择
+    const selection = editorState.getSelection();
+    
+    // 检查是否有选择
+    if (selection.isCollapsed()) {
+      return undefined;
+    }
+    
+    // 获取内容状态
+    const contentState = editorState.getCurrentContent();
+    
+    // 获取选择的开始和结束位置
+    const startKey = selection.getStartKey();
+    const startOffset = selection.getStartOffset();
+    const endKey = selection.getEndKey();
+    const endOffset = selection.getEndOffset();
+    
+    // 获取所有块
+    const blocks = contentState.getBlockMap();
+    
+    // 如果选择在同一个块内
+    if (startKey === endKey) {
+      const textBlock = contentState.getBlockForKey(startKey);
+      return textBlock.getText().slice(startOffset, endOffset);
+    }
+    
+    // 如果选择跨多个块
+    let selectedText = '';
+    let inSelection = false;
+    
+    blocks.forEach((block) => {
+      if (!block) return;
+      
+      const key = block.getKey();
+      
+      // 开始块
+      if (key === startKey) {
+        selectedText += block.getText().slice(startOffset);
+        inSelection = true;
+      } 
+      // 结束块
+      else if (key === endKey) {
+        selectedText += '\n' + block.getText().slice(0, endOffset);
+        inSelection = false;
+      } 
+      // 中间的块
+      else if (inSelection) {
+        selectedText += '\n' + block.getText();
+      }
+    });
+    
+    return selectedText;
   }
 }
 

@@ -249,6 +249,14 @@ export class LMStudioService implements AIBaseService {
   }
   
   /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType(): AIProviderType {
+    return AIProviderType.LMSTUDIO;
+  }
+  
+  /**
    * 测试API连接
    */
   async testConnection(): Promise<boolean> {

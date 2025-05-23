@@ -666,6 +666,14 @@ export class OpenAICompatibleService implements AIBaseService {
   }
   
   /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType(): AIProviderType {
+    return AIProviderType.OPENAI_COMPATIBLE;
+  }
+  
+  /**
    * 测试连接
    */
   async testConnection(): Promise<boolean> {

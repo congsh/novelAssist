@@ -10,7 +10,8 @@ import {
   ChatCompletionRequest, 
   ChatCompletionResponse, 
   ChatMessage, 
-  ChatMessageRole 
+  ChatMessageRole,
+  AIProviderType
 } from '../types';
 
 /**
@@ -209,6 +210,14 @@ export class DeepSeekService implements AIBaseService {
       this.abortController.abort();
       this.abortController = null;
     }
+  }
+  
+  /**
+   * 获取提供商类型
+   * @returns 提供商类型
+   */
+  getProviderType(): AIProviderType {
+    return AIProviderType.DEEPSEEK;
   }
   
   /**

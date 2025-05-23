@@ -20,12 +20,16 @@ const { Text } = Typography;
 
 interface EditorSidebarProps {
   novelId: string;
+  onVersionHistoryClick?: () => void;
 }
 
 /**
  * 编辑器侧边栏组件，用于显示关联的人物、地点、时间线和大纲
  */
-const EditorSidebar: React.FC<EditorSidebarProps> = ({ novelId }) => {
+const EditorSidebar: React.FC<EditorSidebarProps> = ({ 
+  novelId,
+  onVersionHistoryClick 
+}) => {
   const [activeTab, setActiveTab] = useState<string>('characters');
   const [characters, setCharacters] = useState<Character[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -233,6 +237,26 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({ novelId }) => {
     );
   };
 
+  // 在合适的位置添加版本历史按钮
+  const renderAdditionalTools = () => {
+    return (
+      <div style={{ padding: '16px' }}>
+        <List>
+          <List.Item 
+            onClick={onVersionHistoryClick}
+            style={{ cursor: 'pointer' }}
+          >
+            <List.Item.Meta
+              avatar={<Avatar icon={<HistoryOutlined />} />}
+              title="版本历史"
+              description="查看和恢复历史版本"
+            />
+          </List.Item>
+        </List>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <App>
@@ -279,6 +303,15 @@ const EditorSidebar: React.FC<EditorSidebarProps> = ({ novelId }) => {
       children: (
         <div style={{ padding: '0 8px', height: 'calc(100% - 44px)', overflow: 'auto' }}>
           {renderTimelineEvents()}
+        </div>
+      ),
+    },
+    {
+      key: 'tools',
+      label: <span><HistoryOutlined />工具</span>,
+      children: (
+        <div style={{ padding: '0 8px', height: 'calc(100% - 44px)', overflow: 'auto' }}>
+          {renderAdditionalTools()}
         </div>
       ),
     },
